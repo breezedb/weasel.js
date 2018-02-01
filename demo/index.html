@@ -1,0 +1,38 @@
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf8">
+		<script type='module'>
+			import { popup, Menu } from './weasel.js';
+
+			let menu = new Menu([
+				{ name: 'one', action: () => console.warn('one') },
+				{ name: 'two', action: () => console.warn('two') }
+			]);
+
+			function init() {
+				Array.from(document.querySelectorAll('button'))
+				.forEach(el => {
+					el.addEventListener('click', () => triggers[el.id](el));
+				});
+			}
+			document.addEventListener('DOMContentLoaded', init);
+
+			let triggers = [];
+			triggers.popup = function(el) {
+				popup(el, menu);
+			}
+			triggers.dropdown = function(el) {
+				console.warn('trigger_dropdown');
+			}
+		</script>
+	</body>
+	</head>
+	<body>
+		<section>
+			<button id='popup'>Popup</button>
+		</section>
+		<section>
+			<button id='dropdown'>Dropdown</button>
+		</section>
+</html>

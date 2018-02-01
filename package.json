@@ -1,0 +1,31 @@
+{
+  "name": "weasel.js",
+  "version": "0.0.1",
+  "description": "Collection of UI elements that behave as popovers",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "lint": "tslint -p .",
+    "dev": "tsc -w & rollup -c rollup.config.js -w --verbose --environment build:dev & browser-sync demo dist -w demo,dist",
+    "build-dist": "npm run lint && rollup -c rollup.config.js --environment build:dist"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gristlabs/weasel.js.git"
+  },
+  "author": "Grist Labs",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/gristlabs/weasel.js/issues"
+  },
+  "homepage": "https://github.com/gristlabs/weasel.js#readme",
+  "devDependencies": {
+    "@types/node": "^9.4.0",
+    "rollup": "^0.55.1",
+    "rollup-plugin-node-resolve": "^3.0.2",
+    "uglify-es": "^3.3.9"
+  },
+  "dependencies": {
+    "popper.js": "^1.12.9"
+  }
+}
