@@ -2437,29 +2437,1752 @@ Popper.Defaults = Defaults;
 //# sourceMappingURL=popper.js.map
 
 function close() {
+    // tslint:disable-next-line:no-console
     console.warn('close');
 }
 function update$1() {
+    // tslint:disable-next-line:no-console
     console.warn('update');
 }
 function popup(reference, content) {
-    let el = content.getDOM({ close, update: update$1 });
+    const el = content.getDOM({ close, update: update$1 });
     reference.insertAdjacentElement('afterend', el);
+    // tslint:disable-next-line:no-unused-expression
     new Popper(reference, el);
 }
 
+/**
+ * A simple and fast priority queue with a limited interface to push, pop, peek, and get size. It
+ * is essentially equivalent to both npm modules 'fastpriorityqueue' and 'qheap', but is in
+ * TypeScript and is a bit cleaner and simpler.
+ *
+ * It is constructed with a function that returns which of two items is "prior"; the pop() method
+ * returns the most-prior element.
+ */
+class PriorityQueue {
+    constructor(_isPrior) {
+        this._isPrior = _isPrior;
+        // Items form a binary tree packed into an array. Root is items[0]; children of items[i] are
+        // items[2*i+1] and items[2*i+2]; parent of items[i] is items[(i - 1) >> 1]. For all children,
+        // the invariant isPrior(parent, child) holds.
+        this._items = [];
+    }
+    get size() { return this._items.length; }
+    push(item) {
+        const items = this._items;
+        const isPrior = this._isPrior;
+        let curIdx = this._items.length;
+        while (curIdx > 0) {
+            // While we have a parent that is not prior to us, bubble up the "hole" at items.length.
+            const parIdx = (curIdx - 1) >> 1; // tslint:disable-line:no-bitwise
+            const parItem = items[parIdx];
+            if (isPrior(parItem, item)) {
+                break;
+            }
+            items[curIdx] = parItem;
+            curIdx = parIdx;
+        }
+        items[curIdx] = item;
+    }
+    peek() {
+        return this._items[0];
+    }
+    pop() {
+        if (this._items.length <= 1) {
+            return this._items.pop();
+        }
+        const items = this._items;
+        const isPrior = this._isPrior;
+        const result = items[0];
+        // Bubble the last item downwards from the root.
+        const item = items.pop();
+        const size = this._items.length;
+        let curIdx = 0;
+        let leftIdx = 1;
+        while (leftIdx < size) {
+            const rightIdx = leftIdx + 1;
+            const bestIdx = (rightIdx < size && isPrior(items[rightIdx], items[leftIdx])) ?
+                rightIdx : leftIdx;
+            if (isPrior(item, items[bestIdx])) {
+                break;
+            }
+            items[curIdx] = items[bestIdx];
+            curIdx = bestIdx;
+            leftIdx = curIdx + curIdx + 1;
+        }
+        items[curIdx] = item;
+        return result;
+    }
+}
+
+/**
+ * This module supports computed observables, organizing them into a priority queue, so that
+ * computeds can be updated just once after multiple bundled changes.
+ *
+ * This module is for internal use only (hence the leading underscore in the name). The only
+ * function useful outside is exposed via the `observable` module as `observable.bundleChanges()`.
+ *
+ * Changes may come together because multiple observables are changed synchronously, or because
+ * multiple computeds depend on a single changed observable. In either case, if a computed depends
+ * on multiple observables that are being changed, we want it to just get updated once when the
+ * changes are complete.
+ *
+ * This is done by maintaining a _priority in each computed, where greater values get evaluated
+ * later (computed with greater values depend on those with smaller values). When a computed needs
+ * updating, it adds itself to the queue using enqueue() method. At the end of an observable.set()
+ * call, or of bundleChanges() call, the queue gets processed in order of _priority.
+ */
+class DepItem {
+    /**
+     * Callback should call depItem.useDep(dep) for each DepInput it depends on.
+     */
+    constructor(callback, optContext) {
+        this._priority = 0;
+        this._enqueued = false;
+        this._callback = callback;
+        this._context = optContext;
+    }
+    static isPrioritySmaller(a, b) {
+        return a._priority < b._priority;
+    }
+    /**
+     * Mark depItem as a dependency of this DepItem. The argument may be null to indicate a leaf (an
+     * item such as a plain observable, which does not itself depend on anything else).
+     */
+    useDep(depItem) {
+        const p = depItem ? depItem._priority : 0;
+        if (p >= this._priority) {
+            this._priority = p + 1;
+        }
+    }
+    /**
+     * Recompute this DepItem, calling the callback given in the constructor.
+     */
+    recompute() {
+        this._priority = 0;
+        this._callback.call(this._context);
+    }
+    /**
+     * Add this DepItem to the queue, to be recomputed when the time is right.
+     */
+    enqueue() {
+        if (!this._enqueued) {
+            this._enqueued = true;
+            queue.push(this);
+        }
+    }
+}
+// The main compute queue.
+const queue = new PriorityQueue(DepItem.isPrioritySmaller);
+// Array to keep track of items recomputed during this call to compute(). It could be a local
+// variable in compute(), but is made global to minimize allocations.
+const _seen = [];
+// Counter used for bundling multiple calls to compute() into one.
+let bundleDepth = 0;
+/**
+ * Exposed for unittests. Returns the internal priority value of an observable.
+ */
+
+/**
+ * Update any computed observables that need updating. The update is deferred if we are currently
+ * in the middle of a bundle. This is called automatically whenever you set an observable, and
+ * there should be no need to ever call this by users of the library.
+ */
+function compute() {
+    if (bundleDepth === 0 && queue.size > 0) {
+        // Prevent nested compute() calls, which are unnecessary and can cause deep recursion stack.
+        bundleDepth++;
+        try {
+            // We reuse _seen array to minimize allocations, but always leave it empty.
+            do {
+                const item = queue.pop();
+                _seen.push(item);
+                item.recompute();
+            } while (queue.size > 0);
+        }
+        finally {
+            // We delay the unsetting of _enqueued flag to here, to protect against infinite loops when
+            // a change to a computed causes it to get enqueued again.
+            for (const item of _seen) {
+                item._enqueued = false;
+            }
+            _seen.length = 0;
+            bundleDepth--;
+        }
+    }
+}
+/**
+ * Defer recomputations of all computed observables and subscriptions until func() returns. This
+ * is useful to avoid unnecessary recomputation if you are making several changes to observables
+ * together. This function is exposed as `observable.bundleChanges()`.
+ *
+ * Note that this intentionally does not wait for promises to be resolved, since that would block
+ * all updates to all computeds while waiting.
+ */
+
+/**
+ * emit.js implements an Emitter class which emits events to a list of listeners. Listeners are
+ * simply functions to call, and "emitting an event" just calls those functions.
+ *
+ * This is similar to Backbone events, with more focus on efficiency. Both inserting and removing
+ * listeners is constant time.
+ *
+ * To create an emitter:
+ *    let emitter = new Emitter();
+ *
+ * To add a listener:
+ *    let listener = fooEmitter.addListener(callback);
+ * To remove a listener:
+ *    listener.dispose();
+ *
+ * The only way to remove a listener is to dispose the Listener object returned by addListener().
+ * You can often use autoDispose to do this automatically when subscribing in a constructor:
+ *    this.autoDispose(fooEmitter.addListener(this.onFoo, this));
+ *
+ * To emit an event, call emit() with any number of arguments:
+ *    emitter.emit("hello", "world");
+ */
+// Note about a possible alternative implementation.
+//
+// We could implement the same interface using an array of listeners. Certain issues apply, in
+// particular with removing listeners from inside emit(), and in ensuring that removals are
+// constant time on average. Such an implementation was attempted and timed. The result is that
+// compared to the linked-list implementation here, add/remove combination could be made nearly
+// twice faster (on average), while emit and add/remove/emit are consistently slightly slower.
+//
+// The implementation here was chosen based on those timings, and as the simpler one. For example,
+// on one setup (macbook, node4, 5-listener queue), add+remove take 0.1us, while add+remove+emit
+// take 3.82us. (In array-based implementation with same set up, add+remove is 0.06us, while
+// add+remove+emit is 4.80us.)
+// The private property name to hold next/prev pointers.
+function _noop() { }
+/**
+ * This is an implementation of a doubly-linked list, with just the minimal functionality we need.
+ */
+class LLink {
+    constructor() {
+        this._next = null;
+        this._prev = null;
+        // This immediate circular reference might be undesirable for GC, but might not matter, and
+        // makes the linked list implementation simpler and faster.
+        this._next = this;
+        this._prev = this;
+    }
+    isDisposed() {
+        return !this._next;
+    }
+    _insertBefore(next, node) {
+        const last = next._prev;
+        last._next = node;
+        next._prev = node;
+        node._prev = last;
+        node._next = next;
+    }
+    _removeNode(node) {
+        if (node._prev) {
+            node._prev._next = node._next;
+            node._next._prev = node._prev;
+        }
+        node._prev = node._next = null;
+    }
+    _disposeList() {
+        let node = this;
+        let next = node._next;
+        while (next !== null) {
+            node._next = node._prev = null;
+            node = next;
+            next = node._next;
+        }
+    }
+}
+class Emitter extends LLink {
+    /**
+     * Constructs an Emitter object.
+     */
+    constructor() {
+        super();
+        this._changeCB = _noop;
+        this._changeCBContext = undefined;
+    }
+    /**
+     * Adds a listening callback to the list of functions to call on emit().
+     * @param {Function} callback: Function to call.
+     * @param {Object} optContext: Context for the function.
+     * @returns {Listener} Listener object. Its dispose() method removes the callback from the list.
+     */
+    addListener(callback, optContext) {
+        return new Listener(this, callback, optContext);
+    }
+    /**
+     * Calls all listener callbacks, passing all arguments to each of them.
+     */
+    emit(...args) {
+        Listener.callAll(this._next, this, args);
+    }
+    /**
+     * Sets the single callback that would get called when a listener is added or removed.
+     * @param {Function} changeCB(hasListeners): Function to call after a listener is added or
+     *    removed. It's called with a boolean indicating whether this Emitter has any listeners.
+     *    Pass in `null` to unset the callback.
+     */
+    setChangeCB(changeCB, optContext) {
+        this._changeCB = changeCB || _noop;
+        this._changeCBContext = optContext;
+    }
+    /**
+     * Helper used by Listener class, but not intended for public usage.
+     */
+    _triggerChangeCB() {
+        this._changeCB.call(this._changeCBContext, this.hasListeners());
+    }
+    /**
+     * Returns whether this Emitter has any listeners.
+     */
+    hasListeners() {
+        return this._next !== this;
+    }
+    /**
+     * Disposes the Emitter. It breaks references between the emitter and all the items, allowing
+     * for better garbage collection. It effectively disposes all current listeners.
+     */
+    dispose() {
+        this._disposeList();
+        this._changeCB = _noop;
+        this._changeCBContext = undefined;
+    }
+}
+/**
+ * Listener object wraps a callback added to an Emitter, allowing for O(1) removal when the
+ * listener is disposed.
+ */
+class Listener extends LLink {
+    constructor(emitter, callback, context) {
+        super();
+        this.emitter = emitter;
+        this.callback = callback;
+        this.context = context;
+        this._insertBefore(emitter, this);
+        emitter._triggerChangeCB();
+    }
+    static callAll(begin, end, args) {
+        while (begin !== end) {
+            const lis = begin;
+            lis.callback.call(lis.context, ...args);
+            begin = lis._next;
+        }
+    }
+    dispose() {
+        if (this.isDisposed()) {
+            return;
+        }
+        this._removeNode(this);
+        this.emitter._triggerChangeCB();
+    }
+}
+
+/**
+ * observable.js implements an observable value, which lets other code subscribe to changes.
+ *
+ * E.g.
+ *  let o = observable(17);
+ *  o.get();          // 17
+ *  o.addListener(foo);
+ *  o.set("asdf");    // foo("asdf", 17) gets called.
+ *  o.get();          // "asdf"
+ *
+ * To subscribe to changes, use obs.addListener(callback, context). The callback will get called
+ * with (newValue, oldValue) as arguments.
+ *
+ * When you use observables within the body of a computed(), you can automatically create
+ * subscriptions to them with the use(obs) function. E.g.
+ *    let obs3 = computed(use => use(obs1) + use(obs2));
+ * creates a computed observable `obs3` which is subscribed to changes to `obs1` and `obs2`.
+ *
+ * Note that unlike with knockout, use(obs) method requires an explicit `use` function, which is
+ * always passed to a computed's read() callback for this purpose. This makes it explicit when a
+ * dependency is created, and which observables the dependency connects.
+ */
+class Observable {
+    /**
+     * Internal constructor for an Observable. You should use observable() function instead.
+     */
+    constructor(value) {
+        this._onChange = new Emitter();
+        this._value = value;
+    }
+    /**
+     * Returns the value of the observable. It is fast and does not create a subscription.
+     * (It is similar to knockout's peek()).
+     * @returns {Object} The current value of the observable.
+     */
+    get() { return this._value; }
+    /**
+     * Sets the value of the observable. If the value differs from the previously set one, then
+     * listeners to this observable will get called with (newValue, oldValue) as arguments.
+     * @param {Object} value: The new value to set.
+     */
+    set(value) {
+        const prev = this._value;
+        if (value !== prev) {
+            this._value = value;
+            this._onChange.emit(value, prev);
+            compute();
+        }
+    }
+    /**
+     * Adds a callback to listen to changes in the observable.
+     * @param {Function} callback: Function, called on changes with (newValue, oldValue) arguments.
+     * @param {Object} optContext: Context for the function.
+     * @returns {Listener} Listener object. Its dispose() method removes the callback.
+     */
+    addListener(callback, optContext) {
+        return this._onChange.addListener(callback, optContext);
+    }
+    /**
+     * Returns whether this observable has any listeners.
+     */
+    hasListeners() {
+        return this._onChange.hasListeners();
+    }
+    /**
+     * Sets a single callback to be called when a listener is added or removed. It overwrites any
+     * previously-set such callback.
+     * @param {Function} changeCB(hasListeners): Function to call after a listener is added or
+     *    removed. It's called with a boolean indicating whether this observable has any listeners.
+     *    Pass in `null` to unset the callback.
+     */
+    setListenerChangeCB(changeCB, optContext) {
+        this._onChange.setChangeCB(changeCB, optContext);
+    }
+    /**
+     * Used by subscriptions to keep track of dependencies. An observable that has dependnecies,
+     * such as a computed observable, would override this method.
+     */
+    _getDepItem() {
+        return null;
+    }
+    /**
+     * Disposes the observable.
+     */
+    dispose() {
+        this._onChange.dispose();
+        this._value = undefined;
+    }
+    /**
+     * Returns whether this observable is disposed.
+     */
+    isDisposed() {
+        return this._onChange.isDisposed();
+    }
+}
+/**
+ * Creates a new Observable with the initial value of optValue if given or undefined if omitted.
+ * @param {Object} optValue: The initial value to set.
+ * @returns {Observable} The newly created observable.
+ */
+
+/**
+ * subscribe.js implements subscriptions to several observables at once.
+ *
+ * E.g. if we have some existing observables (which may be instances of `computed`),
+ * we can subscribe to them explicitly:
+ *    let obs1 = observable(5), obs2 = observable(12);
+ *    subscribe(obs1, obs2, (use, v1, v2) => console.log(v1, v2));
+ *
+ * or implicitly by using `use(obs)` function, which allows dynamic subscriptions:
+ *    subscribe(use => console.log(use(obs1), use(obs2)));
+ *
+ * In either case, if obs1 or obs2 is changed, the callbacks will get called automatically.
+ *
+ * Creating a subscription allows any number of dependencies to be specified explicitly, and their
+ * values will be passed to the callback(). These may be combined with automatic dependencies
+ * detected using use(). Note that constructor dependencies have less overhead.
+ *
+ *    subscribe(...deps, ((use, ...depValues) => READ_CALLBACK));
+ */
+const emptyArray = [];
+class Subscription {
+    /**
+     * Internal constructor for a Subscription. You should use subscribe() function instead.
+     */
+    constructor(callback, dependencies) {
+        this._depItem = new DepItem(this._evaluate, this);
+        this._dependencies = dependencies.length > 0 ? dependencies : emptyArray;
+        this._depListeners = dependencies.length > 0 ? dependencies.map((obs) => this._subscribeTo(obs)) : emptyArray;
+        this._dynDeps = new Map(); // Maps dependent observable to its Listener object.
+        this._callback = callback;
+        this._useFunc = this._useDependency.bind(this);
+        this._evaluate();
+    }
+    /**
+     * Disposes the computed, unsubscribing it from all observables it depends on.
+     */
+    dispose() {
+        for (const lis of this._depListeners) {
+            lis.dispose();
+        }
+        for (const lis of this._dynDeps.values()) {
+            lis.dispose();
+        }
+    }
+    /**
+     * For use by computed(): returns this subscription's hook into the _computed_queue.
+     */
+    _getDepItem() { return this._depItem; }
+    /**
+     * @private
+     * Gets called when the callback calls `use(obs)` for an observable. It creates a
+     * subscription to `obs` if one doesn't yet exist.
+     * @param {Observable} obs: The observable being used as a dependency.
+     */
+    _useDependency(obs) {
+        let listener = this._dynDeps.get(obs);
+        if (!listener) {
+            listener = this._subscribeTo(obs);
+            this._dynDeps.set(obs, listener);
+        }
+        listener._inUse = true;
+        this._depItem.useDep(obs._getDepItem());
+        return obs.get();
+    }
+    /**
+     * @private
+     * Calls the callback() with appropriate args, and updates subscriptions when it is done.
+     * I.e. adds dynamic subscriptions created via `use(obs)`, and disposes those no longer used.
+     */
+    _evaluate() {
+        try {
+            // Note that this is faster than using .map().
+            const readArgs = [this._useFunc];
+            for (let i = 0, len = this._dependencies.length; i < len; i++) {
+                readArgs[i + 1] = this._dependencies[i].get();
+                this._depItem.useDep(this._dependencies[i]._getDepItem());
+            }
+            return this._callback.apply(undefined, readArgs);
+        }
+        finally {
+            this._dynDeps.forEach((listener, obs) => {
+                if (listener._inUse) {
+                    listener._inUse = false;
+                }
+                else {
+                    this._dynDeps.delete(obs);
+                    listener.dispose();
+                }
+            });
+        }
+    }
+    /**
+     * @private
+     * Subscribes this computed to another observable that it depends on.
+     * @param {Observable} obs: The observable to subscribe to.
+     * @returns {Listener} Listener object.
+     */
+    _subscribeTo(obs) {
+        return obs.addListener(this._enqueue, this);
+    }
+    /**
+     * @private
+     * Adds this item to the recompute queue.
+     */
+    _enqueue() {
+        this._depItem.enqueue();
+    }
+}
+/**
+ * Creates a new Subscription.
+ * @param {Observable} ...observables: The initial params, of which there may be zero or more, are
+ *    observables on which this computed depends. When any of them change, the callback()
+ *    will be called with the values of these observables as arguments.
+ * @param {Function} callback: will be called with arguments (use, ...values), i.e. the
+ *    `use` function and values for all of the ...observables that precede this argument.
+ *    This callback is called immediately, and whenever any dependency changes.
+ * @returns {Subscription} The new subscription which may be disposed to unsubscribe.
+ */
+
+/**
+ * computed.js implements a computed observable, whose value depends on other observables and gets
+ * recalculated automatically when they change.
+ *
+ * E.g. if we have some existing observables (which may themselves be instances of `computed`),
+ * we can create a computed that subscribes to them explicitly:
+ *  let obs1 = observable(5), obs2 = observable(12);
+ *  let computed1 = computed(obs1, obs2, (use, v1, v2) => v1 + v2);
+ *
+ * or implicitly by using `use(obs)` function:
+ *  let computed2 = computed(use => use(obs1) + use(obs2));
+ *
+ * In either case, computed1.get() and computed2.get() will have the value 17. If obs1 or obs2 is
+ * changed, computed1 and computed2 will get recomputed automatically.
+ *
+ * Creating a computed allows any number of dependencies to be specified explicitly, and their
+ * values will be passed to the read() callback. These may be combined with automatic dependencies
+ * detected using use(). Note that constructor dependencies have less overhead.
+ *
+ *  let val = computed(...deps, ((use, ...depValues) => READ_CALLBACK));
+ *
+ * You may specify a `write` callback by calling `onWrite(WRITE_CALLBACK)`, which will be called
+ * whenever set() is called on the computed by its user. If a `write` bacllback is not specified,
+ * calling `set` on a computed observable will throw an exception.
+ *
+ * Note that pureComputed.js offers a variation of computed() with the same interface, but which
+ * stays unsubscribed from dependencies while it itself has no subscribers.
+ */
+function _noWrite() {
+    throw new Error("Can't write to non-writable computed");
+}
+class Computed extends Observable {
+    /**
+     * Internal constructor for a Computed observable. You should use computed() function instead.
+     */
+    constructor(callback, dependencies) {
+        // At initialization we force an undefined value even though it's not of type T: it gets set
+        // to a proper value during the creation of new Subscription, which calls this._read.
+        super(undefined);
+        this._callback = callback;
+        this._write = _noWrite;
+        this._sub = new Subscription(this._read.bind(this), dependencies);
+    }
+    /**
+     * Used by subscriptions to keep track of dependencies.
+     */
+    _getDepItem() {
+        return this._sub._getDepItem();
+    }
+    /**
+     * "Sets" the value of the computed by calling the write() callback if one was provided in the
+     * constructor. Throws an error if there was no such callback (not a "writable" computed).
+     * @param {Object} value: The value to pass to the write() callback.
+     */
+    set(value) { this._write(value); }
+    /**
+     * Set callback to call when this.set(value) is called, to make it a writable computed. If not
+     * set, attempting to write to this computed will throw an exception.
+     */
+    onWrite(writeFunc) {
+        this._write = writeFunc;
+        return this;
+    }
+    /**
+     * Disposes the computed, unsubscribing it from all observables it depends on.
+     */
+    dispose() {
+        this._sub.dispose();
+        super.dispose();
+    }
+    _read(use, ...args) {
+        super.set(this._callback(use, ...args));
+    }
+}
+/**
+ * Creates a new Computed.
+ * @param {Observable} ...observables: The initial params, of which there may be zero or more, are
+ *    observables on which this computed depends. When any of them change, the read() callback
+ *    will be called with the values of these observables as arguments.
+ * @param {Function} readCallback: Read callback that will be called with (use, ...values),
+ *    i.e. the `use` function and values for all of the ...observables. The callback is called
+ *    immediately and whenever any dependency changes.
+ * @returns {Computed} The newly created computed observable.
+ */
+function computed(...args) {
+    const readCb = args.pop();
+    return new Computed(readCb, args);
+}
+// TODO Consider implementing .singleUse() method.
+// An open question is in how to pass e.g. kd.hide(computed(x, x => !x)) in such a way that
+// the temporary computed can be disposed when temporary, but not otherwise. A function-only
+// syntax is kd.hide(use => !use(x)), but prevents use of static subscriptions.
+//
+// (a) function-only use of computeds is fine and useful.
+// (b) pureComputed is another option, and doesn't technically require getting disposed.
+// (c) kd.hide(compObs), kd.autoDispose(compObs) is more general and
+//     can be replaced more concisely by kd.hide(compObs.singleUse())
+// .singleUse() automatically disposes a computed (or an observable?) once there are no
+// subscriptions to it. If there are no subscriptions at the time of this call, waits for the next
+// tick, and possibly disposes then.
+
+/**
+ * dispose.js provides tools to objects that needs to dispose resources, such as destroy DOM, and
+ * unsubscribe from events. The motivation with examples is presented here:
+ *
+ *    https://phab.getgrist.com/w/disposal/
+ *
+ * Disposable is a class for components that need cleanup (e.g. maintain DOM, listen to
+ * events, subscribe to anything). It provides a .dispose() method that should be called to
+ * destroy the component, and .autoDispose() family of methods that the component should use to
+ * take responsibility for other pieces that require cleanup.
+ *
+ * To define a disposable class:
+ *    class Foo extends Disposable {
+ *      create(...args) { ...constructor work... }      // Instead of constructor, if needed.
+ *    }
+ *
+ * To create Foo:
+ *    let foo = new Foo(args...);
+ *
+ * Foo should do constructor work in its create() method (or rarely other methods), where it can
+ * take ownership of other objects:
+ *    this.bar = this.autoDispose(new Bar(...));
+ *
+ * Note that create() is automatically called at construction. Its advantage is that if it throws
+ * an exception, any calls to .autoDispose() that happened before the exception are honored.
+ *
+ * For more customized disposal:
+ *    this.baz = this.autoDisposeWithMethod('destroy', new Baz());
+ *    this.elem = this.autoDisposeWith(ko.cleanNode, document.createElement(...));
+ * When `this` is disposed, it will call this.baz.destroy(), and ko.cleanNode(this.elem).
+ *
+ * To call another method on disposal (e.g. to add custom disposal logic):
+ *    this.autoDisposeCallback(this.myUnsubscribeAllMethod);
+ * The method will be called with `this` as context, and no arguments.
+ *
+ * To wipe out this object on disposal (i.e. set all properties to null):
+ *    this.wipeOnDispose();
+ * See the documentation of that method for more info.
+ *
+ * To dispose Foo:
+ *    foo.dispose();
+ * Owned objects will be disposed in reverse order from which `autoDispose` were called.
+ *
+ * To release an owned object:
+ *    this.disposeRelease(this.bar);
+ *
+ * To dispose an owned object early:
+ *    this.disposeDiscard(this.bar);
+ *
+ * To determine if an object has already been disposed:
+ *    foo.isDisposed()
+ */
+class Disposable {
+    /**
+     * Constructor forwards arguments to  `this.create(...args)`, which is where subclasses should
+     * do any constructor work. This ensures that if create() throws an exception, dispose() gets
+     * called to clean up the partially-constructed object.
+     */
+    constructor(...args) {
+        this._disposalList = [];
+        try {
+            this.create(...args);
+        }
+        catch (e) {
+            try {
+                this.dispose();
+            }
+            catch (e) {
+                // tslint:disable-next-line:no-console
+                console.error("Error disposing partially constructed %s:", this.constructor.name, e);
+            }
+            throw e;
+        }
+    }
+    /**
+     * Take ownership of `obj`, and dispose it when `this.dispose` is called.
+     * @param {Object} obj: Disposable object to take ownership of.
+     * @returns {Object} obj
+     */
+    autoDispose(obj) {
+        return this.autoDisposeWith(_defaultDisposer, obj);
+    }
+    /**
+     * Take ownership of `obj`, and dispose it by calling the specified function.
+     * @param {Function} disposer: disposer(obj) will be called to dispose the object, with `this`
+     *    as the context.
+     * @param {Object} obj: Object to take ownership of, on which `disposer` will be called.
+     * @returns {Object} obj
+     */
+    autoDisposeWith(disposer, obj) {
+        this._disposalList.push({ obj, disposer });
+        return obj;
+    }
+    /**
+     * Take ownership of `obj`, and dispose it with `obj[methodName]()`.
+     * @param {String} methodName: method name to call on obj when it's time to dispose it.
+     * @returns {Object} obj
+     */
+    autoDisposeWithMethod(methodName, obj) {
+        return this.autoDisposeWith((_obj) => _obj[methodName](), obj);
+    }
+    /**
+     * Adds the given callback to be called when `this.dispose` is called.
+     * @param {Function} callback: Called on disposal with `this` as the context and no arguments.
+     * @returns nothing
+     */
+    autoDisposeCallback(callback) {
+        this.autoDisposeWith(_callFuncHelper, callback);
+    }
+    /**
+     * Wipe out this object when it is disposed, i.e. set all its properties to null. It is
+     * recommended to call this early in the constructor. It's safe to call multiple times.
+     *
+     * This makes disposal more costly, but has certain benefits:
+     * - If anything still refers to the object and uses it, we'll get an early error, rather than
+     *   silently keep going, potentially doing useless work (or worse) and wasting resources.
+     * - If anything still refers to the object (even without using it), the fields of the object
+     *   can still be garbage-collected.
+     * - If there are circular references involving this object, they get broken, making the job
+     *   easier for the garbage collector.
+     *
+     * The recommendation is to use it for complex, longer-lived objects, but to skip for objects
+     * which are numerous and short-lived (and less likely to be referenced from unexpected places).
+     */
+    wipeOnDispose() {
+        this.autoDisposeWith(_wipeOutObject, this);
+    }
+    /**
+     * Remove `obj` from the list of owned objects; it will not be disposed on `this.dispose`.
+     * @param {Object} obj: Object to release.
+     * @returns {Object} obj
+     */
+    disposeRelease(obj) {
+        const list = this._disposalList;
+        const index = list.findIndex((entry) => (entry.obj === obj));
+        if (index !== -1) {
+            list.splice(index, 1);
+        }
+        return obj;
+    }
+    /**
+     * Dispose an owned object `obj` now, and remove it from the list of owned objects.
+     * @param {Object} obj: Object to release.
+     * @returns nothing
+     */
+    disposeDiscard(obj) {
+        const list = this._disposalList;
+        const index = list.findIndex((entry) => (entry.obj === obj));
+        if (index !== -1) {
+            const entry = list[index];
+            list.splice(index, 1);
+            entry.disposer.call(this, obj);
+        }
+    }
+    /**
+     * Returns whether this object has already been disposed.
+     */
+    isDisposed() {
+        return this._disposalList === null;
+    }
+    /**
+     * Clean up `this` by disposing all owned objects, and calling `stopListening()` if defined.
+     */
+    dispose() {
+        const list = this._disposalList;
+        if (list) {
+            // This makes isDisposed() true, and the object is no longer valid (in particular,
+            // this._disposalList no longer satisfies its declared type).
+            this._disposalList = null;
+            // Go backwards through the disposal list, and dispose everything.
+            for (let i = list.length - 1; i >= 0; i--) {
+                const entry = list[i];
+                _disposeHelper(this, entry.disposer, entry.obj);
+            }
+        }
+    }
+}
+/**
+ * Internal helper to allow adding cleanup callbacks to the disposalList. It acts as the
+ * "disposer" for callback, by simply calling them with the same context that it is called with.
+ */
+function _callFuncHelper(callback) {
+    callback.call(this);
+}
+/**
+ * Wipe out the given object by setting each property to a dummy sentinel value. This is helpful
+ * for objects that are disposed and should be ready to be garbage-collected.
+ *
+ * The sentinel value doesn't have to be null, but some values cause more helpful errors than
+ * others. E.g. if a.x = "disposed", then a.x.foo() throws "undefined is not a function", while
+ * when a.x = null, a.x.foo() throws "Cannot read property 'foo' of null", which is more helpful.
+ */
+function _wipeOutObject(obj) {
+    Object.keys(obj).forEach((k) => (obj[k] = null));
+}
+/**
+ * Internal helper to call a disposer on an object. It swallows errors (but reports them) to make
+ * sure that when we dispose an object, an error in disposing one owned part doesn't stop
+ * the disposal of the other parts.
+ */
+function _disposeHelper(owner, disposer, obj) {
+    try {
+        disposer.call(owner, obj);
+    }
+    catch (e) {
+        // tslint:disable-next-line:no-console
+        console.error("While disposing %s, error disposing %s: %s", _describe(owner), _describe(obj), e);
+    }
+}
+/**
+ * Helper for reporting errors during disposal. Try to report the type of the object.
+ */
+function _describe(obj) {
+    return (obj && obj.constructor && obj.constructor.name ? obj.constructor.name : '' + obj);
+}
+/**
+ * Helper disposer that simply invokes the .dispose() method.
+ */
+function _defaultDisposer(obj) {
+    obj.dispose();
+}
+
+/**
+ * Private global disposal map. It maintains the association between DOM nodes and cleanup
+ * functions added with dom.onDispose(). To support multiple disposers on one element, we use a
+ * WeakMap-based linked list:
+ *
+ *    _disposeMap[elem] = disposer2;
+ *    _disposeMap[disposer2] = disposer1;
+ *    etc.
+ *
+ * This avoids allocating arrays or using undeclared properties for a different linked list.
+ */
+const _disposeMap = new WeakMap();
+// Internal helper to walk the DOM tree, calling visitFunc(elem) on all descendants of elem.
+// Descendants are processed first.
+function _walkDom(elem, visitFunc) {
+    let c = elem.firstChild;
+    while (c) {
+        // Note: this might be better done using an explicit stack, but in practice DOM trees aren't
+        // so deep as to cause problems.
+        _walkDom(c, visitFunc);
+        c = c.nextSibling;
+    }
+    visitFunc(elem);
+}
+// Internal helper to run all disposers for a single element.
+function _disposeElem(elem) {
+    let disposer = _disposeMap.get(elem);
+    if (disposer) {
+        let key = elem;
+        do {
+            _disposeMap.delete(key);
+            disposer(elem);
+            // Find the next disposer; these are chained when there are multiple.
+            key = disposer;
+            disposer = _disposeMap.get(key);
+        } while (disposer);
+    }
+}
+/**
+ * Run disposers associated with any descendant of elem or with elem itself. Disposers get
+ * associated with elements using dom.onDispose(). Descendants are processed first.
+ *
+ * It is automatically called if one of the function arguments to dom() throws an exception during
+ * element creation. This way any onDispose() handlers set on the unfinished element get called.
+ *
+ * @param {Element} elem: The element to run disposers on.
+ */
+function domDispose(elem) {
+    _walkDom(elem, _disposeElem);
+}
+/**
+ * Associate a disposerFunc with a DOM element. It will be called when the element is disposed
+ * using domDispose() on it or any of its parents. If onDispose is called multiple times, all
+ * disposerFuncs will be called in reverse order.
+ * @param {Element} elem: The element to associate the disposer with.
+ * @param {Function} disposerFunc(elem): Will be called when domDispose() is called on the
+ *    element or its ancestor.
+ * Note that it is not necessary usually to dispose event listeners attached to an element (e.g.
+ * with dom.on()) since their lifetime is naturally limited to the lifetime of the element.
+ */
+function onDisposeElem(elem, disposerFunc) {
+    const prevDisposer = _disposeMap.get(elem);
+    _disposeMap.set(elem, disposerFunc);
+    if (prevDisposer) {
+        _disposeMap.set(disposerFunc, prevDisposer);
+    }
+}
+function onDispose(disposerFunc) {
+    return (elem) => onDisposeElem(elem, disposerFunc);
+}
+/**
+ * Make the given element own the disposable, and call its dispose method when domDispose() is
+ * called on the element or any of its parents.
+ * @param {Element} elem: The element to own the disposable.
+ * @param {Disposable} disposable: Anything with a .dispose() method.
+ */
+function autoDisposeElem(elem, disposable) {
+    if (disposable) {
+        onDisposeElem(elem, () => disposable.dispose());
+    }
+}
+function autoDispose(disposable) {
+    if (disposable) {
+        return (elem) => autoDisposeElem(elem, disposable);
+    }
+}
+
+/**
+ * binding.ts offers a convenient subscribe() function that creates a binding to an observable, a
+ * a plain value, or a function from which it builds a computed.
+ */
+function subscribe$1(valueObs, callback) {
+    // A plain function (to make a computed from), or a knockout observable.
+    if (typeof valueObs === 'function') {
+        // Knockout observable.
+        const koValue = valueObs;
+        if (typeof koValue.peek === 'function') {
+            let savedValue = koValue.peek();
+            const sub = koValue.subscribe((val) => {
+                const old = savedValue;
+                savedValue = val;
+                callback(val, old);
+            });
+            callback(savedValue, undefined);
+            return sub;
+        }
+        // Function from which to make a computed. Note that this is also reasonable:
+        //    let sub = subscribe(use => callback(valueObs(use)));
+        // The difference is that when valueObs() evaluates to unchanged value, callback would be
+        // called in the version above, but not in the version below.
+        const comp = computed(valueObs);
+        comp.addListener(callback);
+        callback(comp.get(), undefined);
+        return comp; // Disposing this will dispose its one listener.
+    }
+    // An observable.
+    if (valueObs instanceof Observable) {
+        const sub = valueObs.addListener(callback);
+        callback(valueObs.get(), undefined);
+        return sub;
+    }
+    callback(valueObs, undefined);
+    return null;
+}
+
+/**
+ * Module that allows client-side code to use browser globals (such as `document` or `Node`) in a
+ * way that allows those globals to be replaced by mocks in browser-less tests.
+ *
+ *    import {G} from 'browserGlobals';
+ *    ... use G.document
+ *    ... use G.Node
+ *
+ * Initially, the global `window` object, is the source of the global values.
+ *
+ * To use a mock of globals in a test, use:
+ *
+ *    import {pushGlobals, popGlobals} as G from 'browserGlobals';
+ *    before(function() {
+ *      pushGlobals(mockWindow);    // e.g. jsdom.jsdom(...).defaultView
+ *    });
+ *    after(function() {
+ *      popGlobals();
+ *    });
+ */
+function _updateGlobals(dest, source) {
+    dest.DocumentFragment = source.DocumentFragment;
+    dest.Element = source.Element;
+    dest.Node = source.Node;
+    dest.document = source.document;
+    dest.window = source.window;
+}
+// The initial IBrowserGlobals object.
+const initial = {};
+_updateGlobals(initial, (typeof window !== 'undefined' ? window : {}));
+// The globals G object strats out with a copy of `initial`.
+const G = Object.assign({}, initial);
+// The stack of globals that always has the intial object, but which may be overridden.
+
+/**
+ * Restore the values of globals to undo the preceding pushGlobals() call.
+ */
+
+const _dataMap = new WeakMap();
+/**
+ * Internal helper that binds the callback to valueObs, which may be a value, observble, or
+ * function, and attaches a disposal callback to the passed-in element.
+ */
+function _subscribe(elem, valueObs, callback) {
+    autoDisposeElem(elem, subscribe$1(valueObs, callback));
+}
+/**
+ * Sets multiple attributes of a DOM element. The `attrs()` variant takes no `elem` argument.
+ * @param {Object} attrsObj: Object mapping attribute names to attribute values.
+ */
+function attrsElem(elem, attrsObj) {
+    for (const key of Object.keys(attrsObj)) {
+        elem.setAttribute(key, attrsObj[key]);
+    }
+}
+function attrs(attrsObj) {
+    return (elem) => attrsElem(elem, attrsObj);
+}
+/**
+ * Sets an attribute of a DOM element to the given value. Removes the attribute when the value is
+ * null or undefined. The `attr()` variant takes no `elem` argument, and `attrValue` may be an
+ * observable or function.
+ * @param {Element} elem: The element to update.
+ * @param {String} attrName: The name of the attribute to bind, e.g. 'href'.
+ * @param {String|null} attrValue: The string value or null to remove the attribute.
+ */
+function attrElem(elem, attrName, attrValue) {
+    if (attrValue === null || attrValue === undefined) {
+        elem.removeAttribute(attrName);
+    }
+    else {
+        elem.setAttribute(attrName, attrValue);
+    }
+}
+function attr(attrName, attrValueObs) {
+    return (elem) => _subscribe(elem, attrValueObs, (val) => attrElem(elem, attrName, val));
+}
+/**
+ * Sets or removes a boolean attribute of a DOM element. According to the spec, empty string is a
+ * valid true value for the attribute, and the false value is indicated by the attribute's absence.
+ * The `boolAttr()` variant takes no `elem`, and `boolValue` may be an observable or function.
+ * @param {Element} elem: The element to update.
+ * @param {String} attrName: The name of the attribute to bind, e.g. 'checked'.
+ * @param {Boolean} boolValue: Boolean value whether to set or unset the attribute.
+ */
+function boolAttrElem(elem, attrName, boolValue) {
+    attrElem(elem, attrName, boolValue ? '' : null);
+}
+function boolAttr(attrName, boolValueObs) {
+    return (elem) => _subscribe(elem, boolValueObs, (val) => boolAttrElem(elem, attrName, val));
+}
+/**
+ * Adds a text node to the element. The `text()` variant takes no `elem`, and `value` may be an
+ * observable or function.
+ * @param {Element} elem: The element to update.
+ * @param {String} value: The text value to add.
+ */
+function textElem(elem, value) {
+    elem.appendChild(G.document.createTextNode(value));
+}
+function text(valueObs) {
+    return (elem) => {
+        const textNode = G.document.createTextNode('');
+        _subscribe(elem, valueObs, (val) => { textNode.nodeValue = val; });
+        elem.appendChild(textNode);
+    };
+}
+/**
+ * Sets a style property of a DOM element to the given value. The `style()` variant takes no
+ * `elem`, and `value` may be an observable or function.
+ * @param {Element} elem: The element to update.
+ * @param {String} property: The name of the style property to update, e.g. 'fontWeight'.
+ * @param {String} value: The value for the property.
+ */
+function styleElem(elem, property, value) {
+    elem.style[property] = value;
+}
+function style(property, valueObs) {
+    return (elem) => _subscribe(elem, valueObs, (val) => styleElem(elem, property, val));
+}
+/**
+ * Sets the property of a DOM element to the given value.
+ * The `prop()` variant takes no `elem`, and `value` may be an observable or function.
+ * @param {Element} elem: The element to update.
+ * @param {String} property: The name of the property to update, e.g. 'disabled'.
+ * @param {Object} value: The value for the property.
+ */
+function propElem(elem, property, value) {
+    elem[property] = value;
+}
+function prop(property, valueObs) {
+    return (elem) => _subscribe(elem, valueObs, (val) => propElem(elem, property, val));
+}
+/**
+ * Shows or hides the element depending on a boolean value. Note that the element must be visible
+ * initially (i.e. unsetting style.display should show it).
+ * The `show()` variant takes no `elem`, and `boolValue` may be an observable or function.
+ * @param {Element} elem: The element to update.
+ * @param {Boolean} boolValue: True to show the element, false to hide it.
+ */
+function showElem(elem, boolValue) {
+    elem.style.display = boolValue ? '' : 'none';
+}
+function show(boolValueObs) {
+    return (elem) => _subscribe(elem, boolValueObs, (val) => showElem(elem, val));
+}
+/**
+ * The opposite of show, hiding the element when boolValue is true.
+ * The `hide()` variant takes no `elem`, and `boolValue` may be an observable or function.
+ * @param {Element} elem: The element to update.
+ * @param {Boolean} boolValue: True to hide the element, false to show it.
+ */
+function hideElem(elem, boolValue) {
+    elem.style.display = boolValue ? 'none' : '';
+}
+function hide$1(boolValueObs) {
+    return (elem) => _subscribe(elem, boolValueObs, (val) => hideElem(elem, val));
+}
+/**
+ * Toggles a css class `className` according to a boolean value.
+ * The `toggleClass()` variant takes no `elem`, and `boolValue` may be an observable or function.
+ * @param {Element} elem: The element to update.
+ * @param {String} className: The name of the class to toggle.
+ * @param {Boolean} boolValue: Whether to add or remove the class.
+ */
+function toggleClassElem(elem, className, boolValue) {
+    elem.classList.toggle(className, Boolean(boolValue));
+}
+function toggleClass(className, boolValueObs) {
+    return (elem) => _subscribe(elem, boolValueObs, (val) => toggleClassElem(elem, className, val));
+}
+/**
+ * Adds a css class of the given name. A falsy name does not add any class. The `cssClass()`
+ * variant takes no `elem`, and `className` may be an observable or function. In this case, when
+ * the class name changes, the previously-set class name is removed.
+ * @param {Element} elem: The element to update.
+ * @param {String} className: The name of the class to add.
+ */
+function cssClassElem(elem, className) {
+    if (className) {
+        elem.classList.add(className);
+    }
+}
+function cssClass(classNameObs) {
+    return (elem) => {
+        let prevClass = null;
+        _subscribe(elem, classNameObs, (name) => {
+            if (prevClass) {
+                elem.classList.remove(prevClass);
+            }
+            prevClass = name;
+            if (name) {
+                elem.classList.add(name);
+            }
+        });
+    };
+}
+/**
+ * Associate arbitrary data with a DOM element. The `data()` variant takes no `elem`, and `value`
+ * may be an observable or function.
+ * @param {Element} elem: The element with which to associate data.
+ * @param {String} key: Key to identify this piece of data among others attached to elem.
+ * @param {Object} value: Arbitrary value to associate with elem.
+ */
+function dataElem(elem, key, value) {
+    const obj = _dataMap.get(elem);
+    if (obj) {
+        obj[key] = value;
+    }
+    else {
+        onDisposeElem(elem, () => _dataMap.delete(elem));
+        _dataMap.set(elem, { [key]: value });
+    }
+}
+function data(key, valueObs) {
+    return (elem) => _subscribe(elem, valueObs, (val) => dataElem(elem, key, val));
+}
+function getData(elem, key) {
+    const obj = _dataMap.get(elem);
+    return obj && obj[key];
+}
+// Helper for domComputed(); replace content between markerPre and markerPost with the given DOM
+// content, running disposers if any on the removed content.
+function _replaceContent(elem, markerPre, markerPost, content) {
+    if (markerPre.parentNode === elem) {
+        let next;
+        for (let n = markerPre.nextSibling; n && n !== markerPost; n = next) {
+            next = n.nextSibling;
+            domDispose(n);
+            elem.removeChild(n);
+        }
+        elem.insertBefore(frag(content), markerPost);
+    }
+}
+function domComputed(valueObs, contentFunc) {
+    const _contentFunc = contentFunc || identity;
+    return (elem) => {
+        const markerPre = G.document.createComment('a');
+        const markerPost = G.document.createComment('b');
+        elem.appendChild(markerPre);
+        elem.appendChild(markerPost);
+        _subscribe(elem, valueObs, (value) => _replaceContent(elem, markerPre, markerPost, _contentFunc(value)));
+    };
+}
+function identity(arg) { return arg; }
+/**
+ * Conditionally appends DOM to an element. The value may be an observable or function (from which
+ * a computed is created), whose value -- if truthy -- will be passed to `contentFunc` which
+ * should return DOM content. If the value is falsy, DOM content is removed.
+ *
+ * Note that if the observable changes between different truthy values, contentFunc gets called
+ * for each value, and previous content gets destroyed. To consider all truthy values the same,
+ * use an observable that returns a proper boolean, e.g.
+ *
+ *    dom.maybe(use => Boolean(use(fooObs)), () => dom(...));
+ *
+ * As with domComputed(), dom.maybe() may but should not be used when the argument is not an
+ * observable or function. The following are equivalent:
+ *
+ *    dom(..., dom.maybe(myValue, () => dom(...)));
+ *    dom(..., myValue ? dom(...) : null);
+ *
+ * The latter is preferred for being simpler.
+ *
+ * @param {Element} elem: The element to which to append the DOM content.
+ * @param {Object} boolValueObs: Observable or function for a computed.
+ * @param [Function] contentFunc: Function called with the result of boolValueObs when it is
+ *    truthy. Should returning DOM as output.
+ */
+function maybe(boolValueObs, contentFunc) {
+    return domComputed(boolValueObs, (value) => value ? contentFunc(value) : null);
+}
+
+function dom(tagString, ...args) {
+    return _updateWithArgsOrDispose(_createFromTagString(_createElementHtml, tagString), args);
+}
+/**
+ * svg('tag#id.class1.class2', ...args)
+ *  Same as dom(...), but creates an SVG element.
+ */
+function svg(tagString, ...args) {
+    return _updateWithArgsOrDispose(_createFromTagString(_createElementSvg, tagString), args);
+}
+// Internal helper used to create HTML elements.
+function _createElementHtml(tag) {
+    return G.document.createElement(tag);
+}
+// Internal helper used to create SVG elements.
+function _createElementSvg(tag) {
+    return G.document.createElementNS("http://www.w3.org/2000/svg", tag);
+}
+/**
+ * Internal helper to parse tagString, create an element using createFunc with the given tag, and
+ * set its id and classes from the tagString.
+ * @param {Funtion} createFunc(tag): Function that should create an element given a tag name.
+ *    It is passed in to allow creating elements in different namespaces (e.g. plain HTML vs SVG).
+ * @param {String} tagString: String of the form "tag#id.class1.class2" where id and classes are
+ *    optional.
+ * @return {Element} The result of createFunc(), possibly with id and class attributes also set.
+ */
+function _createFromTagString(createFunc, tagString) {
+    // We do careful hand-written parsing rather than use a regexp for speed. Using a regexp is
+    // significantly more expensive.
+    let tag;
+    let id;
+    let classes;
+    let dotPos = tagString.indexOf(".");
+    const hashPos = tagString.indexOf('#');
+    if (dotPos === -1) {
+        dotPos = tagString.length;
+    }
+    else {
+        classes = tagString.substring(dotPos + 1).replace(/\./g, ' ');
+    }
+    if (hashPos === -1) {
+        tag = tagString.substring(0, dotPos);
+    }
+    else if (hashPos > dotPos) {
+        throw new Error(`ID must come before classes in dom("${tagString}")`);
+    }
+    else {
+        tag = tagString.substring(0, hashPos);
+        id = tagString.substring(hashPos + 1, dotPos);
+    }
+    const elem = createFunc(tag);
+    if (id) {
+        elem.setAttribute('id', id);
+    }
+    if (classes) {
+        elem.setAttribute('class', classes);
+    }
+    return elem;
+}
+function update$2(elem, ...args) {
+    return _updateWithArgs(elem, args);
+}
+function _updateWithArgs(elem, args) {
+    for (const arg of args) {
+        _updateWithArg(elem, arg);
+    }
+    return elem;
+}
+function _updateWithArgsOrDispose(elem, args) {
+    try {
+        return _updateWithArgs(elem, args);
+    }
+    catch (e) {
+        domDispose(elem);
+        throw e;
+    }
+}
+function _updateWithArg(elem, arg) {
+    if (typeof arg === 'function') {
+        const value = arg(elem);
+        // Skip the recursive call in the common case when the function returns nothing.
+        if (value !== undefined && value !== null) {
+            _updateWithArg(elem, value);
+        }
+    }
+    else if (Array.isArray(arg)) {
+        _updateWithArgs(elem, arg);
+    }
+    else if (arg === undefined || arg === null) {
+        // Nothing to do.
+    }
+    else if (arg instanceof G.Node) {
+        elem.appendChild(arg);
+    }
+    else if (typeof arg === 'object') {
+        attrsElem(elem, arg);
+    }
+    else {
+        elem.appendChild(G.document.createTextNode(arg));
+    }
+}
+/**
+ * Creates a DocumentFragment processing arguments the same way as the dom() function.
+ */
+function frag(...args) {
+    const elem = G.document.createDocumentFragment();
+    return _updateWithArgsOrDispose(elem, args);
+}
+/**
+ * Find the first element matching a selector; just an abbreviation for document.querySelector().
+ */
+function find$1(selector) { return G.document.querySelector(selector); }
+/**
+ * Find all elements matching a selector; just an abbreviation for document.querySelectorAll().
+ */
+function findAll(selector) { return G.document.querySelectorAll(selector); }
+
+/**
+ * Implementation of UI components that can be inserted into dom(). See documentation for
+ * createElem() and create().
+ */
+class Component extends Disposable {
+    /**
+     * Components must extend this class and implement a `render()` method, which is called at
+     * construction with constructor arguments, and should return DOM for the component.
+     *
+     * It is recommended that any constructor work is done in this method.
+     *
+     * render() may return any type of value that's accepted by dom() as an argument, including a
+     * DOM element, a string, null, or an array. The returned DOM is automatically owned by the
+     * component, so do not wrap it in `this.autoDispose()`.
+     */
+    render(...args) {
+        throw new Error("Not implemented");
+    }
+    /**
+     * This is not intended to be called directly or overridden. Instead, implement render().
+     */
+    create(elem, ...args) {
+        const content = this.render(...args);
+        this._markerPre = G.document.createComment('A');
+        this._markerPost = G.document.createComment('B');
+        // If the containing DOM is disposed, it will dispose all of our DOM (included among children
+        // of the containing DOM). Let it also dispose this Component when it gets to _markerPost.
+        // Since _unmount() is unnecessary here, we skip its work by unseting _markerPre/_markerPost.
+        onDisposeElem(this._markerPost, () => {
+            this._markerPre = this._markerPost = undefined;
+            this.dispose();
+        });
+        // When the component is disposed, unmount the DOM we created (i.e. dispose and remove).
+        // Except that we skip this as unnecessary when the disposal is triggered by containing DOM.
+        this.autoDisposeWith(this._unmount, this);
+        // Insert the result of render() into the given parent element.
+        update$2(elem, this._markerPre, content, this._markerPost);
+    }
+    /**
+     * Detaches and disposes the DOM created and attached in _mount().
+     */
+    _unmount() {
+        // Dispose the owned content, and remove it from the DOM.
+        if (this._markerPre && this._markerPre.parentNode) {
+            let next;
+            const elem = this._markerPre.parentNode;
+            for (let n = this._markerPre.nextSibling; n && n !== this._markerPost; n = next) {
+                next = n.nextSibling;
+                domDispose(n);
+                elem.removeChild(n);
+            }
+            elem.removeChild(this._markerPre);
+            elem.removeChild(this._markerPost);
+        }
+    }
+}
+/**
+ * Construct and insert a UI component into the given DOM element. The component must extend
+ * dom.Component(...), and must implement a `render(...)` method which should do any constructor
+ * work and return DOM. DOM may be any type value accepted by dom() as an argument, including a
+ * DOM element, string, null, or array. The returned DOM is automatically owned by the component.
+ *
+ * Logically, the parent `elem` owns the created component, and the component owns the DOM
+ * returned by its render() method. If the parent is disposed, so is the component and its DOM. If
+ * the component is somehow disposed directly, then its DOM is disposed and removed from `elem`.
+ *
+ * Note the correct usage:
+ *
+ *       dom('div', dom.create(Comp1), dom.create(Comp2, ...args))
+ *
+ * To understand why the syntax is such, consider a potential alterntive such as:
+ *
+ *       dom('div', _insert_(new Comp1()), _insert_(new Comp2(...args))
+ *
+ *    In both cases, the constructor for Comp1 runs before the constructor for Comp2. What happens
+ *    when Comp2's constructor throws an exception? In the second case, nothing yet owns the
+ *    created Comp1 component, and it will never get cleaned up. In the first, correct case,
+ *    dom('div') element gets ownership of it early enough and will dispose it.
+ *
+ * @param {Element} elem: The element to which to append the newly constructed component.
+ * @param {Class} ComponentClass: The component class to instantiate. It must extend
+ *    dom.Component(...) and implement the render() method.
+ * @param {Objects} ...args: Arguments to the constructor which passes them to the render method.
+ */
+function createElem(elem, ComponentClass, ...args) {
+    // tslint:disable-next-line:no-unused-expression
+    new ComponentClass(elem, ...args);
+}
+function create(ComponentClass, ...args) {
+    // tslint:disable-next-line:no-unused-expression
+    return (elem) => { new ComponentClass(elem, ...args); };
+}
+/**
+ * If you need to initialize a component after creation, you may do it in the middle of a dom()
+ * call using createInit(), in which the last of args is initFunc: a function called with the
+ * constructed instance of the component:
+ *    dom.createInit(MyComponent, ...args, c => {
+ *      c.addChild(...);
+ *      c.setOption(...);
+ *    });
+ * The benefit of such inline construction is that the component is owned by the dom element as
+ * soon as it's created, so an exception in the init function or later among dom()'s arguments
+ * will trigger a cleanup.
+ */
+function createInit(ComponentClass, ...args) {
+    return (elem) => {
+        const initFunc = args.pop();
+        const c = new ComponentClass(elem, ...args);
+        initFunc(c);
+    };
+}
+
+/**
+ * domevent provides a way to listen to DOM events, similar to JQuery's `on()` function. Its
+ * methods are also exposed via the dom.js module, as `dom.on()`, etc.
+ *
+ * It is typically used as an argument to the dom() function:
+ *
+ *    dom('div', dom.on('click', (event, elem) => { ... }));
+ *
+ * When the div is disposed, the listener is automatically removed.
+ *
+ * The underlying interface to listen to an event is this:
+ *
+ *    let listener = dom.onElem(elem, 'click', (event, elem) => { ... });
+ *
+ * The callback is called with the event and the element to which it was attached. Unlike in
+ * JQuery, the callback's return value is ignored. Use event.stopPropagation() and
+ * event.preventDefault() explicitly if needed.
+ *
+ * To stop listening:
+ *
+ *    listener.dispose();
+ *
+ * Disposing the listener returned by .on() is the only way to stop listening to an event. You can
+ * use autoDispose to stop listening automatically when subscribing in a Disposable object:
+ *
+ *    this.autoDispose(domevent.on(document, 'mouseup', callback));
+ *
+ * To listen to descendants of an element matching the given selector (what JQuery calls
+ * "delegated events", see http://api.jquery.com/on/):
+ *
+ *    dom('div', dom.onMatch('.selector', 'click', (event, elem) => { ... }));
+ * or
+ *    let lis = domevent.onMatchElem(elem, '.selector', 'click', (event, el) => { ... });
+ *
+ * In this usage, the element passed to the callback will be a DOM element matching the given
+ * selector. If there are multiple matches, the callback is only called for the innermost one.
+ *
+ * If you need to remove the callback on first call, here's a useful pattern:
+ *    let lis = domevent.onElem(elem, 'mouseup', e => { lis.dispose(); other_work(); });
+ */
+function _findMatch(inner, outer, selector) {
+    for (let el = inner; el && el !== outer; el = el.parentElement) {
+        if (el.matches(selector)) {
+            return el;
+        }
+    }
+    return null;
+}
+class DomEventListener {
+    constructor(elem, eventType, callback, useCapture, selector) {
+        this.elem = elem;
+        this.eventType = eventType;
+        this.callback = callback;
+        this.useCapture = useCapture;
+        this.selector = selector;
+        this.elem.addEventListener(this.eventType, this, this.useCapture);
+    }
+    handleEvent(event) {
+        const cb = this.callback;
+        cb(event, this.elem);
+    }
+    dispose() {
+        this.elem.removeEventListener(this.eventType, this, this.useCapture);
+    }
+}
+class DomEventMatchListener extends DomEventListener {
+    handleEvent(event) {
+        const elem = _findMatch(event.target, this.elem, this.selector);
+        if (elem) {
+            const cb = this.callback;
+            cb(event, elem);
+        }
+    }
+}
+/**
+ * Listen to a DOM event. The `on()` variant takes no `elem` argument, and may be used as an
+ * argument to dom() function.
+ * @param {DOMElement} elem: DOM Element to listen to.
+ * @param {String} eventType: Event type to listen for (e.g. 'click').
+ * @param {Function} callback: Callback to call as `callback(event, elem)`, where elem is `elem`.
+ * @param [Boolean] options.useCapture: Add the listener in the capture phase. This should very
+ *    rarely be useful (e.g. JQuery doesn't even offer it as an option).
+ * @returns {Object} Listener object whose .dispose() method will remove the event listener.
+ */
+function onElem(elem, eventType, callback, { useCapture = false } = {}) {
+    return new DomEventListener(elem, eventType, callback, useCapture);
+}
+function on(eventType, callback, { useCapture = false } = {}) {
+    return (elem) => new DomEventListener(elem, eventType, callback, useCapture);
+}
+/**
+ * Listen to a DOM event on descendants of the given elem matching the given selector. The
+ * `onMatch()` variant takes no `elem` argument, and may be used as an argument to dom().
+ * @param {DOMElement} elem: DOM Element to whose descendants to listen.
+ * @param {String} selector: CSS selector string to filter elements that trigger this event.
+ *    JQuery calls it "delegated events" (http://api.jquery.com/on/). The callback will only be
+ *    called when the event occurs for an element matching the given selector. If there are
+ *    multiple elements matching the selector, the callback is only called for the innermost one.
+ * @param {String} eventType: Event type to listen for (e.g. 'click').
+ * @param {Function} callback: Callback to call as `callback(event, elem)`, where elem is a
+ *    descendent of `elem` which matches `selector`.
+ * @param [Boolean] options.useCapture: Add the listener in the capture phase. This should very
+ *    rarely be useful (e.g. JQuery doesn't even offer it as an option).
+ * @returns {Object} Listener object whose .dispose() method will remove the event listener.
+ */
+function onMatchElem(elem, selector, eventType, callback, { useCapture = false } = {}) {
+    return new DomEventMatchListener(elem, eventType, callback, useCapture, selector);
+}
+function onMatch(selector, eventType, callback, { useCapture = false } = {}) {
+    return (elem) => new DomEventMatchListener(elem, eventType, callback, useCapture, selector);
+}
+
+/**
+ * dom.js provides a way to build a DOM tree easily.
+ *
+ * E.g.
+ *  import {dom} from 'grainjs';
+ *  dom('a#link.c1.c2', {'href': url}, 'Hello ', dom('span', 'world'));
+ *    creates Node <a id="link" class="c1 c2" href={{url}}Hello <span>world</span></a>.
+ *
+ *  dom.frag(dom('span', 'Hello'), ['blah', dom('div', 'world')])
+ *    creates document fragment with <span>Hello</span>blah<div>world</div>.
+ *
+ * DOM can also be created and modified inline during creation:
+ *  dom('a#id.c1',
+ *      dom.cssClass('c2'), dom.attr('href', url),
+ *      dom.text('Hello '), dom('span', dom.text('world')))
+ *    creates Node <a id="link" class="c1 c2" href={{url}}Hello <span>world</span></a>,
+ *    identical to the first example above.
+ */
+// We keep various dom-related functions organized in private modules, but they are exposed here.
+function dom$1(tagString, ...args) {
+    return dom(tagString, ...args);
+}
+// Additionally export all methods as properties of dom() function.
+(function (dom$$1) {
+    dom$$1.svg = svg;
+    dom$$1.frag = frag;
+    dom$$1.update = update$2;
+    dom$$1.find = find$1;
+    dom$$1.findAll = findAll;
+    dom$$1.domDispose = domDispose;
+    dom$$1.onDisposeElem = onDisposeElem;
+    dom$$1.onDispose = onDispose;
+    dom$$1.autoDisposeElem = autoDisposeElem;
+    dom$$1.autoDispose = autoDispose;
+    dom$$1.attrsElem = attrsElem;
+    dom$$1.attrs = attrs;
+    dom$$1.attrElem = attrElem;
+    dom$$1.attr = attr;
+    dom$$1.boolAttrElem = boolAttrElem;
+    dom$$1.boolAttr = boolAttr;
+    dom$$1.textElem = textElem;
+    dom$$1.text = text;
+    dom$$1.styleElem = styleElem;
+    dom$$1.style = style;
+    dom$$1.propElem = propElem;
+    dom$$1.prop = prop;
+    dom$$1.showElem = showElem;
+    dom$$1.show = show;
+    dom$$1.hideElem = hideElem;
+    dom$$1.hide = hide$1;
+    dom$$1.toggleClassElem = toggleClassElem;
+    dom$$1.toggleClass = toggleClass;
+    dom$$1.cssClassElem = cssClassElem;
+    dom$$1.cssClass = cssClass;
+    dom$$1.dataElem = dataElem;
+    dom$$1.data = data;
+    dom$$1.getData = getData;
+    dom$$1.domComputed = domComputed;
+    dom$$1.maybe = maybe;
+    dom$$1.Component = Component;
+    dom$$1.createElem = createElem;
+    dom$$1.create = create;
+    dom$$1.createInit = createInit;
+    dom$$1.onElem = onElem;
+    dom$$1.on = on;
+    dom$$1.onMatchElem = onMatchElem;
+    dom$$1.onMatch = onMatch;
+})(dom$1 || (dom$1 = {}));
+
+/**
+ * Grain.js observables and computeds are similar to (and mostly inspired by) those in
+ * Knockout.js. In fact, they can work together.
+ *
+ *  import {fromKo} from 'kowrap'
+ *
+ *  fromKo(koObservable)
+ *
+ * returns a Grain.js observable that mirrors the passed-in Knockout observable (which may be a
+ * computed as well). Similarly,
+ *
+ *  import {toKo} from 'kowrap';
+ *  import * as ko from 'knockout';
+ *
+ *  toKo(ko, observable)
+ *
+ * returns a Knockout.js observable that mirrows the passed-in Grain observable or computed. Note
+ * that toKo() mus tbe called with the knockout module as an argument. This is to avoid adding
+ * knockout as a dependency of grainjs.
+ *
+ * In both cases, calling fromKo/toKo twice on the same observable will return the same wrapper,
+ * and subscriptions and disposal are appropriately set up to make usage seamless.
+ */
+
+/**
+ * Returns a Knockout observable which mirrors a Grain.js observable.
+ */
+
+/**
+ * Returns f such that f() calls func(...boundArgs), i.e. optimizes `() => func(...boundArgs)`.
+ * It is faster on node6 by 57-92%.
+ */
+
+/**
+ * Returns f such that f(unboundArg) calls func(unboundArg, ...boundArgs).
+ * I.e. optimizes `(arg) => func(arg, ...boundArgs)`.
+ * It is faster on node6 by 0-92%.
+ */
+
+/**
+ * Returns f such that f(unboundArg) calls func(...boundArgs, unboundArg).
+ * I.e. optimizes `(arg) => func(...boundArgs, arg)`.
+ * It is faster on node6 by 0-92%.
+ */
+
 class Menu {
     constructor(items) {
-        this._items = items;
+        this.items = items;
     }
     getDOM() {
-        let el = document.createElement('div');
-        el.innerHTML = `
-      <ul>
-        ${this._items.map(item => `<li> i ${item.name}</li>`).join('\n')}
-      </ul>
-    `;
-        return el;
+        return dom$1('div', dom$1('ul', this.items.map((item) => dom$1('li', dom$1.style('color', item.color || 'red'), item.name))));
     }
 }
 

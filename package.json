@@ -21,11 +21,13 @@
   "homepage": "https://github.com/gristlabs/weasel.js#readme",
   "devDependencies": {
     "@types/node": "^9.4.0",
+    "browser-sync": "^2.23.6",
     "rollup": "^0.55.1",
     "rollup-plugin-node-resolve": "^3.0.2",
     "uglify-es": "^3.3.9"
   },
   "dependencies": {
+    "grainjs": "https://github.com/gristlabs/grainjs/releases/download/build-2/grainjs-0.0.1.tgz",
     "popper.js": "^1.12.9"
   }
 }
