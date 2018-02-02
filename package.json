@@ -27,7 +27,7 @@
     "uglify-es": "^3.3.9"
   },
   "dependencies": {
-    "grainjs": "git+https://github.com/gristlabs/grainjs.git#7ec497480048c35ae11d97983ffb914b3a7137c1",
+    "grainjs": "https://github.com/gristlabs/grainjs/releases/download/build-2/grainjs-0.0.1.tgz",
     "popper.js": "^1.12.9"
   }
 }
