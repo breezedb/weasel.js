@@ -1,13 +1,13 @@
 {
   "compilerOptions": {
-    "target": "es2015",
+    "target": "es2016",
+    "module": "commonjs",
+    "moduleResolution": "node",
     "strict": true,
+    "noImplicitAny": true,
     "noUnusedLocals": true,
-    "module": "es2015",
     "baseUrl": ".",
-    "rootDir": ".",
-    "outDir": "build",
-    "moduleResolution": "node"
+    "outDir": "build"
   },
   "include": [
     "index.ts",
