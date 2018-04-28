@@ -7,17 +7,39 @@ import * as webdriver from 'selenium-webdriver';
 import {By, logging, ThenableWebDriver, until, WebDriver, WebElementPromise} from 'selenium-webdriver';
 import * as chrome from 'selenium-webdriver/chrome';
 import * as firefox from 'selenium-webdriver/firefox';
+
 // tslint:disable:no-console
 
 chai.use(chaiAsPromised);
 
+/**
+ * By using `import {assert} from './util', you can be sure that it includes chai-as-promised.
+ */
 export {assert} from 'chai';
 
+// Path for the static files that we serve to the browser that the webdriver starts up.
+const staticPath = path.join(path.dirname(__dirname), 'static');
+
+// Command-line option for whether to keep browser open if a test fails. Note that it needs to be
+// passed after arguments listing test names, otherwise mocha will reject it.
+const noexit: boolean = (process.argv.indexOf("--noexit") !== -1);
+
+/**
+ * Enhanced WebDriver interface.
+ */
 export interface IWebDriverPlus extends ThenableWebDriver {
+  /**
+   * Shorthand to find element by css selector.
+   */
   find(selector: string): WebElementPromise;
+
+  /**
+   * Shorthand to wait for an element to be present, using a css selector.
+   */
   findWait(selector: string, timeout?: number, message?: string): WebElementPromise;
 }
 
+// Implementation of the enhanced WebDriver interface.
 const WebDriverProto = WebDriver.prototype as IWebDriverPlus;
 WebDriverProto.find = function(selector: string) {
   return this.findElement(By.css(selector));
@@ -27,13 +49,10 @@ WebDriverProto.findWait = function(selector: string, timeout?: number, message?:
   return this.wait(until.elementLocated(By.css(selector)), timeout, message);
 };
 
-const staticPath = path.join(path.dirname(__dirname), 'static');
-
 export let driver: IWebDriverPlus;
 let httpServer: http.Server;
 
-const noexit: boolean = (process.argv.indexOf("--noexit") !== -1);
-
+// Start up the webdriver and serve files that its browser will see.
 before(async function() {
   this.timeout(20000);      // Set a longer default timeout.
 
@@ -55,6 +74,7 @@ before(async function() {
   httpServer.listen(8080);
 });
 
+// Quit the webdriver and stop serving files, unless we failed and --noexit is given.
 after(async function() {
   this.timeout(20000);      // Set a longer default timeout.
   let countFailed = 0;
