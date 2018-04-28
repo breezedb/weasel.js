@@ -1,19 +1,30 @@
 import resolve from 'rollup-plugin-node-resolve';
+import typescript from 'rollup-plugin-typescript2';
 import { minify } from 'uglify-es';
 
 let env = process.env.build || 'dev';
 
 const configs = {
-  dev: {
+  dev: [{
     input: 'build/index.js',
     output: {
       file: 'dist/weasel.js',
       format: 'es',
     },
+    plugins: [resolve()]
+  }, {
+    input: 'test/static/basic.ts',
+    output: {
+      file: 'test/static/dist/basic.js',
+      format: 'iife'
+    },
     plugins: [
-      resolve()
-    ]
-  },
+      resolve(),
+      typescript({tsconfigOverride: {
+        compilerOptions: {module: 'es2015'}
+      }}),
+    ],
+  }],
   dist: {
     input: 'build/index.js',
     output: {
@@ -28,7 +39,7 @@ const configs = {
         }
       }
     ]
-  }
+  },
 }
 
 if (!configs[env]) {

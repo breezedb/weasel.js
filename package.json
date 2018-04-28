@@ -35,13 +35,14 @@
     "node-static": "^0.7.10",
     "rollup": "^0.55.1",
     "rollup-plugin-node-resolve": "^3.0.2",
+    "rollup-plugin-typescript2": "^0.13.0",
     "selenium-webdriver": "^4.0.0-alpha.1",
     "ts-node": "^6.0.1",
     "typescript": "^2.8.3",
     "uglify-es": "^3.3.9"
   },
   "dependencies": {
-    "grainjs": "https://github.com/gristlabs/grainjs/releases/download/build-3/grainjs-0.0.1.tgz",
+    "grainjs": "https://github.com/gristlabs/grainjs/releases/download/build-4/grainjs-0.0.1.tgz",
     "popper.js": "^1.12.9"
   }
 }
