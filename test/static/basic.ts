@@ -13,7 +13,7 @@ document.addEventListener('DOMContentLoaded', () => {
     ),
     dom('section',
       dom('button#tooltip', 'Tooltip',
-        dom.on('click', (event, elem) => tooltip(elem, 'Hello')),
+        (elem: Element) => tooltip(elem, 'Hello world!'),
       ),
     ),
   );
