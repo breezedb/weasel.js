@@ -17,6 +17,8 @@ chai.use(chaiAsPromised);
  */
 export {assert} from 'chai';
 
+export let driver: IWebDriverPlus;
+
 // Path for the static files that we serve to the browser that the webdriver starts up.
 const staticPath = path.join(path.dirname(__dirname), 'static');
 
@@ -49,7 +51,6 @@ WebDriverProto.findWait = function(selector: string, timeout?: number, message?:
   return this.wait(until.elementLocated(By.css(selector)), timeout, message);
 };
 
-export let driver: IWebDriverPlus;
 let httpServer: http.Server;
 
 // Start up the webdriver and serve files that its browser will see.

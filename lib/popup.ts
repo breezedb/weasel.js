@@ -1,3 +1,4 @@
+import {dom} from 'grainjs';
 import Popper from 'popper.js';
 
 export interface IDOMContent {
@@ -18,4 +19,10 @@ export function popup(reference: Element, content: IDOMContent) {
   reference.insertAdjacentElement('afterend', el);
   // tslint:disable-next-line:no-unused-expression
   new Popper(reference, el);
+}
+
+export function tooltip(reference: Element, text: string) {
+  const elem = dom('div.weasel_tooltip', {style: 'border: 1px solid blue'}, '[Tooltip] ', text);
+  reference.insertAdjacentElement('afterend', elem);
+  return new Popper(reference, elem);
 }

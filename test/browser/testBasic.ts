@@ -13,4 +13,9 @@ describe('Basic', () => {
     await driver.find('#popup').click();
     assert.equal(await driver.find('#popup').getText(), 'Popup (1)');
   });
+
+  it('should open tooltip', async () => {
+    await driver.findWait('#tooltip').click();
+    assert.equal(await driver.findWait('.weasel_tooltip').getText(), '[Tooltip] Hello');
+  });
 });
