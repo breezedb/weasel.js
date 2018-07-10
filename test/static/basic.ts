@@ -12,8 +12,11 @@ document.addEventListener('DOMContentLoaded', () => {
       ),
     ),
     dom('section',
-      dom('button#tooltip', 'Tooltip',
-        (elem: Element) => tooltip(elem, 'Hello world!'),
+      dom('button#tooltip', {style: 'margin: 200px'}, 'Tooltip', {title: 'Hello world'},
+        tooltip({trigger: ['click'], placement: 'top'}),
+        tooltip({trigger: ['hover'], placement: 'left'}),
+        tooltip({trigger: ['click'], placement: 'bottom'}),
+        tooltip({trigger: ['click'], placement: 'right'}),
       ),
     ),
   );
