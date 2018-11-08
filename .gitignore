@@ -3,3 +3,4 @@
 /dist/
 /test/static/dist/
 .rpt2_cache/
+.cache-loader/

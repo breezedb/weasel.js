@@ -4,10 +4,7 @@
   "description": "Collection of UI elements that behave as popovers",
   "main": "index.js",
   "scripts": {
-    "test": "mocha 'test/browser/**/*.{js,ts}'",
-    "lint": "tslint -p .",
-    "dev": "tsc -w & rollup -c rollup.config.js -w --verbose --environment build:dev & browser-sync demo dist -w demo,dist",
-    "build-dist": "npm run lint && rollup -c rollup.config.js --environment build:dist"
+    "test": "mocha 'test/browser/**/*.{js,ts}'"
   },
   "repository": {
     "type": "git",
@@ -19,16 +16,29 @@
     "url": "https://github.com/gristlabs/weasel.js/issues"
   },
   "homepage": "https://github.com/gristlabs/weasel.js#readme",
-  "devDependencies": {
-    "mocha": "5.2.0",
-    "mocha-webdriver": "0.1.4",
-    "ts-node": "7.0.1",
-    "tslint-language-service": "0.9.9",
-    "typescript": "3.1.6"
-  },
   "dependencies": {
     "grainjs": "git+https://github.com/gristlabs/grainjs.git#1eacd74d7cf788c3aac34baf330842ea329e01e6",
-    "popper.js": "1.14.4",
-    "tslint": "5.11.0"
+    "popper.js": "1.14.4"
+  },
+  "devDependencies": {
+    "@types/chai": "^4.1.7",
+    "@types/chai-as-promised": "^7.1.0",
+    "@types/mocha": "^5.2.5",
+    "@types/node": "^10.12.3",
+    "@types/selenium-webdriver": "^3.0.13",
+    "@types/webpack-merge": "^4.1.3",
+    "@types/webpack-serve": "^2.0.0",
+    "cache-loader": "^1.2.5",
+    "fork-ts-checker-webpack-plugin": "^0.4.15",
+    "mocha": "5.2.0",
+    "mocha-webdriver": "0.1.4",
+    "ts-loader": "^5.3.0",
+    "ts-node": "7.0.1",
+    "tslint": "5.11.0",
+    "tslint-language-service": "0.9.9",
+    "typescript": "3.1.6",
+    "webpack": "^4.25.1",
+    "webpack-merge": "^4.1.4",
+    "webpack-serve": "^2.0.2"
   }
 }
