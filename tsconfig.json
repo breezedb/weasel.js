@@ -6,8 +6,13 @@
     "strict": true,
     "noImplicitAny": true,
     "noUnusedLocals": true,
+    "declaration": true,
+    "sourceMap": true,
     "baseUrl": ".",
-    "outDir": "build"
+    "outDir": "./dist",
+    "plugins": [{
+      "name": "tslint-language-service"
+    }]
   },
   "include": [
     "index.ts",
