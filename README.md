@@ -8,7 +8,7 @@ calls. This is a good and simple pattern for a static menu.
 
 ```typescript
 const menu = new Menu(...);
-popupOpen(triggerElem, menu, options);
+setPopupToOpen(triggerElem, menu, options);
 ```
 
 ## Dynamic menus
@@ -18,7 +18,7 @@ preferred if the menu changes depending on context, or if its content subscribes
 to outside changes (which is wasteful when the menu is not shown).
 
 ```typescript
-popupCreate(triggerElem, () => new Menu(...), options);
+setPopupToCreate(triggerElem, () => new Menu(...), options);
 ```
 
 ## Existing DOM as a popup
@@ -27,7 +27,7 @@ You can use an existing DOM element to attach/detach on open/close, e.g. a toolt
 
 ```typescript
 const myDom = document.querySelector('.my-tooltip');
-popupElem(triggerElem, myDom, options);
+setPopupToAttach(triggerElem, myDom, options);
 ```
 
 ## Custom popup class
@@ -35,18 +35,18 @@ popupElem(triggerElem, myDom, options);
 You can define a custom popup class. It can then be used for either the static or dynamic usage pattern.
 
 ```typescript
-class SpecialMenu implements IPopupContentDisposable {
+class SpecialMenu implements IPopupContent {
   constructor() { ... }
-  openPopup(elem, ctl) { ... };
+  openPopup(ctl) { ...; return content; };
   closePopup() { ... };
-  destroyPopup() { ... }  // Only needed for dynamic usage.
+  dispose() { ... }  // Only needed for setPopupToCreate() usage.
 }
 
 // Calls .openPopup() on open, .closePopup() on close.
-popupOpen(triggerElem, new SpecialMenu(...), options);
+setPopupToOpen(triggerElem, new SpecialMenu(...), options);
 
-// Calls constructor and .openPopup() on open; .closePopup() and .destroyPopup() on close.
-popupCreate(triggerElem, () => new SpecialMenu(...), options);
+// Calls constructor and .openPopup() on open; .closePopup() and .dispose() on close.
+setPopupToCreate(triggerElem, () => new SpecialMenu(...), options);
 ```
 
 ## Low-level interface.
@@ -56,8 +56,7 @@ for all the more convenient interfaces above, and you may use it e.g. to create
 adapters for other libraries. See popupFunc() documentation for an example.
 
 ```typescript
-popupFunc(triggerElem, (elem, ctl) => {
-  elem.appendChild(...);
-  return () => { ...dispose... };
+setPopupToFunc(triggerElem, (ctl) => {
+  return () => { content, dispose };
 }, options);
 ```
