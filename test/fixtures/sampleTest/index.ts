@@ -1,3 +1,8 @@
+/**
+ * This test is really only here to make sure we can run browser tests.
+ * It comes from a similar test in grainjs and doesn't test anything code of our own.
+ */
+
 import {dom, computed, input, obsArray} from 'grainjs';
 
 function setupTest() {
