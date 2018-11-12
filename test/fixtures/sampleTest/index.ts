@@ -3,7 +3,7 @@
  * It comes from a similar test in grainjs and doesn't test anything code of our own.
  */
 
-import {dom, computed, input, obsArray} from 'grainjs';
+import {computed, dom, input, obsArray} from 'grainjs';
 
 function setupTest() {
   const values = obsArray<string>([]);

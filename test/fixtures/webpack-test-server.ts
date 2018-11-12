@@ -5,6 +5,8 @@ import * as serve from 'webpack-serve';
 
 // tslint:disable:no-console
 
+// TODO: It should be nice to switch here to webpack-dev-server, as for manual running, but that
+// one does not work properly out of the box (in this context), whereas webpack-serve does.
 export class WebpackServer implements IMochaServer {
   // The result of webpack-serve call. See https://github.com/webpack-contrib/webpack-serve#serveargv-options
   private _server: any;
@@ -15,6 +17,7 @@ export class WebpackServer implements IMochaServer {
     this._server = await serve({}, {
       config: merge(config, {
         serve: {
+          content: [path.resolve(__dirname)],
           port: 9010,
           open: false,
           clipboard: false,

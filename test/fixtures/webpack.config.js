@@ -57,19 +57,16 @@ module.exports = {
     // see https://medium.com/webpack/typescript-webpack-super-pursuit-mode-83cc568dea79
     new ForkTsCheckerWebpackPlugin({ checkSyntacticErrors: true })
   ],
-  serve: {
-    content: [path.resolve(__dirname)],
+  devServer: {
+    contentBase: [path.resolve(__dirname)],
     port: 9000,
-    open: { path: "/" },
+    open: true,
 
     // Serve a trivial little index page.
-    add: (app, middleware, options) => {
-      app.use((ctx, next) => {
-        if (ctx.url === '/') {
-          ctx.type = 'html';
-          ctx.body = Object.keys(entries).map((e) => `<a href="${e}/">${e}</a><br>\n`).join('');
-        }
-        return next();
+    before: (app, server) => {
+      app.get('/', (req, res) => {
+        const body = Object.keys(entries).map((e) => `<a href="${e}/">${e}</a><br>\n`).join('');
+        res.send(`<html><body>${body}</body></html>`);
       });
     },
   }
