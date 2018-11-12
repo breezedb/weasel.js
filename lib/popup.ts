@@ -1,4 +1,4 @@
-import {Disposable, dom, Holder, IDisposable} from 'grainjs';
+import {Disposable, dom, domDispose, Holder, IDisposable} from 'grainjs';
 import debounce = require('lodash/debounce');
 import Popper from 'popper.js';
 
@@ -14,6 +14,10 @@ type Trigger  = 'click' | 'hover' | 'focus';
 export interface IPopupOptions {
   // Placement of popup, as for Popper options, e.g. "top", "bottom-end" or "right-start".
   placement?: Popper.Placement;
+
+  // To which element to append the popup content. Null means triggerElem.parentNode and is the
+  // default; string is a selector for the closest matching ancestor of triggerElem, e.g. 'body'.
+  container?: Element|string|null;
 
   // On what events, the popup is triggered.
   trigger?: Trigger[];
@@ -43,7 +47,7 @@ export interface IPopupControl {
  * The recommended interface for popups to implement. It may be used with setPopupToOpen() or
  * setPopupToCreate() functions. For the latter one, the IPopupContent also needs to be disposable.
  */
-interface IPopupContent {
+export interface IPopupContent {
   // Called when the popup needs to open. Should the popup element to render. If an arrow is
   // desired, it should be an element matching `[x-arrow]` selector within Element.
   openPopup(ctl: IPopupControl): Element;
@@ -80,17 +84,12 @@ export type IPopupOpenFunc = (ctl: IPopupControl) => IPopupOpenResult;
  * trigger this popup.
  */
 export function setPopupToFunc(triggerElem: Element, openFunc: IPopupOpenFunc, options: IPopupOptions): void {
-  const popperOptions: Popper.PopperOptions = {
-    placement: options.placement,
-    modifiers: options.modifiers,
-  };
-
   const holder = new Holder<OpenPopupHelper>();
 
   // Close popup on disposal of triggerElem.
   dom.autoDisposeElem(triggerElem, holder);
 
-  function _open() { OpenPopupHelper.create(holder, triggerElem, openFunc, popperOptions); }
+  function _open() { OpenPopupHelper.create(holder, triggerElem, openFunc, options); }
   function _close() { holder.clear(); }
 
   // If asked to delay, use debounced versions to open and close.
@@ -130,8 +129,13 @@ export function setPopupToFunc(triggerElem: Element, openFunc: IPopupOpenFunc, o
 class OpenPopupHelper extends Disposable implements IPopupControl {
   private _popper: Popper;
 
-  constructor(triggerElem: Element, openFunc: IPopupOpenFunc, options: Popper.PopperOptions) {
+  constructor(triggerElem: Element, openFunc: IPopupOpenFunc, options: IPopupOptions) {
     super();
+
+    const popperOptions: Popper.PopperOptions = {
+      placement: options.placement,
+      modifiers: options.modifiers,
+    };
 
     // Once this object is disposed, unset all fields for easier detection of bugs.
     this.wipeOnDispose();
@@ -139,7 +143,13 @@ class OpenPopupHelper extends Disposable implements IPopupControl {
     // Call the opener function, and dispose the result when closed.
     const {content} = this.autoDispose(openFunc(this));
 
-    this._popper = new Popper(triggerElem, content, options);
+    // Find the requested container.
+    const containerElem = _getContainer(triggerElem, options.container || null);
+    if (containerElem) {
+      containerElem.appendChild(content);
+    }
+
+    this._popper = new Popper(triggerElem, content, popperOptions);
     this.onDispose(() => this._popper.destroy());
 
     // On click anywhere on the page (outside triggerElem or popup content), close it.
@@ -153,6 +163,15 @@ class OpenPopupHelper extends Disposable implements IPopupControl {
 
   public close() { this.dispose(); }
   public update() { this._popper.scheduleUpdate(); }
+}
+
+/**
+ * Helper that finds the container according to IPopupOptions.container. Null means
+ * elem.parentNode; string is a selector for the closest matching ancestor, e.g. 'body'.
+ */
+function _getContainer(elem: Element, container: Element|string|null): Node|null {
+  return (typeof container === 'string') ? elem.closest(container) :
+    (container || elem.parentNode);
 }
 
 /**
@@ -175,6 +194,18 @@ export function setPopupToAttach(triggerElem: Element, myDom: Element, options: 
     content: myDom,
     dispose: () => myDom.remove(),
   });
+  setPopupToFunc(triggerElem, openFunc, options);
+}
+
+/**
+ * Attaches the element returned by the given func on open, detaches and disposes itt on close.
+ */
+export function setPopupToCreateDom(triggerElem: Element, domCreator: () => Element, options: IPopupOptions): void {
+  function openFunc(ctl: IPopupControl) {
+    const content = domCreator();
+    function dispose() { content.remove(); domDispose(content); }
+    return {content, dispose};
+  }
   setPopupToFunc(triggerElem, openFunc, options);
 }
 
