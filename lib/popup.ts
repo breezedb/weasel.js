@@ -1,5 +1,6 @@
 import {Disposable, dom, domDispose, Holder, IDisposable} from 'grainjs';
 import debounce = require('lodash/debounce');
+import defaultsDeep = require('lodash/defaultsDeep');
 import Popper from 'popper.js';
 
 /**
@@ -17,7 +18,12 @@ export interface IPopupOptions {
 
   // To which element to append the popup content. Null means triggerElem.parentNode and is the
   // default; string is a selector for the closest matching ancestor of triggerElem, e.g. 'body'.
-  container?: Element|string|null;
+  attach?: Element|string|null;
+
+  // Boundaries for the placement of the popup. The default is 'viewport'. This determines the
+  // values of modifiers.flip.boundariesElement and modifiers.preventOverflow.boundariesElement.
+  // Use null to use the defaults from popper.js. These may be set individually via modifiers.
+  boundaries?: Element|'scrollParent'|'window'|'viewport'|null;
 
   // On what events, the popup is triggered.
   trigger?: Trigger[];
@@ -28,9 +34,7 @@ export interface IPopupOptions {
   // Modifiers passed directly to the underlying Popper library.
   // See https://popper.js.org/popper-documentation.html#Popper.Defaults
   // Some useful ones include:
-  //  .offset.offset: Offset of popup relative to trigger. Default 0.
-  //  .flip.boundariesElement: Boundary to flip the popup. Default: 'viewport'.
-  //  .preventOverflow.boundariesElement: Boundary to keep popup in view. Default 'scrollParent'.
+  //  .offset.offset: Offset of popup relative to trigger. Default 0 (but affected by arrow).
   modifiers?: Popper.Modifiers;
 }
 
@@ -94,8 +98,8 @@ export function setPopupToFunc(triggerElem: Element, openFunc: IPopupOpenFunc, o
 
   // If asked to delay, use debounced versions to open and close.
   type CB = (() => void) & {cancel?: () => void};
-  const doOpen: CB = options.showDelay ? debounce(_open, options.showDelay, {leading: true}) : _open;
-  const doClose: CB = options.hideDelay ? debounce(_close, options.hideDelay, {leading: true}) : _close;
+  const doOpen: CB = options.showDelay ? debounce(_open, options.showDelay, {trailing: true}) : _open;
+  const doClose: CB = options.hideDelay ? debounce(_close, options.hideDelay, {trailing: true}) : _close;
 
   // Ensure closing cancels a delayed opening and vice versa.
   function open() { if (doClose.cancel) { doClose.cancel(); } doOpen(); }
@@ -134,7 +138,13 @@ class OpenPopupHelper extends Disposable implements IPopupControl {
 
     const popperOptions: Popper.PopperOptions = {
       placement: options.placement,
-      modifiers: options.modifiers,
+      modifiers: (options.boundaries ?
+        defaultsDeep(options.modifiers, {
+          flip: {boundariesElement: options.boundaries},
+          preventOverflow: {boundariesElement: options.boundaries},
+        }) :
+        options.modifiers
+      ),
     };
 
     // Once this object is disposed, unset all fields for easier detection of bugs.
@@ -143,8 +153,8 @@ class OpenPopupHelper extends Disposable implements IPopupControl {
     // Call the opener function, and dispose the result when closed.
     const {content} = this.autoDispose(openFunc(this));
 
-    // Find the requested container.
-    const containerElem = _getContainer(triggerElem, options.container || null);
+    // Find the requested attachment container.
+    const containerElem = _getContainer(triggerElem, options.attach || null);
     if (containerElem) {
       containerElem.appendChild(content);
     }
@@ -169,9 +179,9 @@ class OpenPopupHelper extends Disposable implements IPopupControl {
  * Helper that finds the container according to IPopupOptions.container. Null means
  * elem.parentNode; string is a selector for the closest matching ancestor, e.g. 'body'.
  */
-function _getContainer(elem: Element, container: Element|string|null): Node|null {
-  return (typeof container === 'string') ? elem.closest(container) :
-    (container || elem.parentNode);
+function _getContainer(elem: Element, attachElem: Element|string|null): Node|null {
+  return (typeof attachElem === 'string') ? elem.closest(attachElem) :
+    (attachElem || elem.parentNode);
 }
 
 /**

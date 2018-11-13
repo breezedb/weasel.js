@@ -1,4 +1,5 @@
 import {dom, DomElementMethod, styled} from 'grainjs';
+import defaults = require('lodash/defaults');
 import {IPopupOptions, setPopupToCreateDom} from './popup';
 
 /**
@@ -10,6 +11,8 @@ export interface ITooltipOptions extends IPopupOptions {
 }
 
 const defaultTooltipOptions: ITooltipOptions = {
+  attach: 'body',
+  boundaries: 'viewport',
   placement: 'top',
   showDelay: 0,
   trigger: ['hover', 'focus'],
@@ -25,10 +28,10 @@ export function tooltip(options?: ITooltipOptions): DomElementMethod {
   return (elem) => tooltipElem(elem, options);
 }
 export function tooltipElem(triggerElem: Element, options: ITooltipOptions = {}): void {
-  const opts: ITooltipOptions = {...defaultTooltipOptions, ...options};
+  options = defaults({}, options, defaultTooltipOptions);
 
   // The simple solution is this:
-  return setPopupToCreateDom(triggerElem, () => _createDom(triggerElem, opts), opts);
+  return setPopupToCreateDom(triggerElem, () => _createDom(triggerElem, options), options);
 
   // More involved, and less pleasant, perhaps unnecessarily, is this, which turns off the title,
   // so that the native tooltip isn't shown while the custom one shows. Popper's tooltip.js
@@ -104,7 +107,7 @@ const cssTooltip = styled('div', `
   position: absolute;
   background: #FFC107;
   color: black;
-  width: 150px;
+  width: 100px;
   border-radius: 3px;
   box-shadow: 0 0 2px rgba(0,0,0,0.5);
   padding: 10px;
