@@ -13,7 +13,7 @@ describe('sampleTest', () => {
     return Promise.all((await elems).map((elem) => elem.getText()));
   }
 
-  it('should respond to changing koArray', async function() {
+  it('should respond to changing obsArray', async function() {
     assert.deepEqual(await getText(driver.findAll('#out1 li')), []);
 
     await driver.find('#in1 input').sendKeys("foo", Key.ENTER);

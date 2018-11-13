@@ -1,28 +1,5 @@
-import {assert, driver, useServer, WebElement} from 'mocha-webdriver';
+import {assert, driver, useServer} from 'mocha-webdriver';
 import {server} from '../fixtures/webpack-test-server';
-
-class WebElementRect implements ClientRect {
-  constructor(public readonly rect: {width: number, height: number, x: number, y: number}) {}
-  get width(): number { return this.rect.width; }
-  get height(): number { return this.rect.height; }
-  get top(): number { return this.rect.y; }
-  get bottom(): number { return this.rect.y + this.rect.height; }
-  get left(): number { return this.rect.x; }
-  get right(): number { return this.rect.x + this.rect.width; }
-}
-
-Object.assign(WebElement.prototype, {
-  async rect(this: WebElement): Promise<ClientRect> {
-    return new WebElementRect(await this.getRect());
-  },
-});
-
-declare module "selenium-webdriver" {
-  interface WebElement {    // tslint:disable-line:interface-name
-    rect(): ClientRect;
-    getRect(): Promise<{width: number, height: number, x: number, y: number}>;
-  }
-}
 
 describe('popper', () => {
   useServer(server);

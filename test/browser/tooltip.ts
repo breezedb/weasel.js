@@ -1,44 +1,5 @@
-import {assert, driver, useServer, WebElement, WebElementPromise} from 'mocha-webdriver';
+import {assert, driver, useServer, WebElement} from 'mocha-webdriver';
 import {server} from '../fixtures/webpack-test-server';
-
-// tslint:disable-next-line:no-var-requires
-const command = require('selenium-webdriver/lib/command');
-
-class WebElementRect implements ClientRect {
-  constructor(public readonly rect: {width: number, height: number, x: number, y: number}) {}
-  get width(): number { return this.rect.width; }
-  get height(): number { return this.rect.height; }
-  get top(): number { return this.rect.y; }
-  get bottom(): number { return this.rect.y + this.rect.height; }
-  get left(): number { return this.rect.x; }
-  get right(): number { return this.rect.x + this.rect.width; }
-}
-
-Object.assign(WebElement.prototype, {
-  async rect(this: WebElement): Promise<ClientRect> {
-    return new WebElementRect(await this.getRect());
-  },
-  // As of 4.0.0-alpha.1, selenium-webdriver mistakenly swallows errors in getRect(), override
-  // here to fix that. TODO: This is strictly temporary until fixed in selenium-webdriver.
-  async getRect() {
-    return await (this as any).execute_(
-      new command.Command(command.Name.GET_ELEMENT_RECT));
-  },
-  mouseMove(this: WebElement, params: {x?: number, y?: number} = {}): WebElementPromise {
-    // Unfortunately selenium-webdriver typings at this point (Nov'18) are a major version behind.
-    const actions = this.getDriver().actions() as any;
-    const p = actions.move({origin: this, ...params}).perform();
-    return new WebElementPromise(this.getDriver(), p.then(() => this));
-  },
-});
-
-declare module "selenium-webdriver" {
-  interface WebElement {    // tslint:disable-line:interface-name
-    rect(): ClientRect;
-    getRect(): Promise<{width: number, height: number, x: number, y: number}>;
-    mouseMove(params?: {x?: number, y?: number}): WebElementPromise;
-  }
-}
 
 type RelPos = 'above'|'below'|'leftOf'|'rightOf';
 async function assertPosition(a: WebElement, b: WebElement, rel: RelPos, delta: number): Promise<void> {
@@ -52,7 +13,7 @@ async function assertPosition(a: WebElement, b: WebElement, rel: RelPos, delta: 
   }
 }
 
-describe('popper', () => {
+describe('tooltip', () => {
   useServer(server);
 
   before(async function() {
