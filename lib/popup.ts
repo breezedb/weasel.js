@@ -219,6 +219,17 @@ export function setPopupToCreateDom(triggerElem: Element, domCreator: () => Elem
   setPopupToFunc(triggerElem, openFunc, options);
 }
 
+// TODO: The attempt to use a class implementing IPopupContent for tooltip exposed quite a bunch
+// of problems with the current design:
+// (1) openPopup() method needs triggerElem
+// (3) responsibility for attaching/detaching isn't symmetrical: popup.js attaches but caller is
+//     supposed to detach.
+// (2) closePopup() vs dispose() distinction does not make sense. Should be enough to construct+dispose.
+//     The goal is for a single class to be usable in two ways; then it should be explained. Still
+//     there are questions: can openPopup() be called multiple times on one object?
+// (4) It's way more verbose than the functional way (ctor/dtor simplifications might improve this)
+/*
+
 /**
  * On opening the popup, calls the creator function, and .openPopup(ctl) on the created object. On
  * closing the popup, calls .closePopup() and then .dispose() on the created object.

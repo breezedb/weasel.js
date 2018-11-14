@@ -3,7 +3,7 @@
  */
 
 import {dom, DomElementMethod, makeTestId, styled, TestId} from 'grainjs';
-import {ITooltipOptions, tooltip} from '../../../lib/tooltip';
+import {darkTooltipTheme, ITooltipOptions, tooltip} from '../../../lib/tooltip';
 
 document.addEventListener('DOMContentLoaded', () => {
   document.body.appendChild(setupTest());
@@ -35,7 +35,7 @@ function addTooltips(prefix: string, boundaries?: ITooltipOptions["boundaries"])
   return (elem) => {
     dom.update(elem,
       tooltip({placement: 'top', title: `${prefix} top`, boundaries}),
-      tooltip({placement: 'right', title: `${prefix} right`, boundaries}),
+      tooltip({placement: 'right', title: `${prefix} right`, boundaries, theme: darkTooltipTheme}),
       tooltip({placement: 'bottom', title: `${prefix} bottom`, boundaries}),
       tooltip({placement: 'left', title: `${prefix} left`, boundaries}),
     );

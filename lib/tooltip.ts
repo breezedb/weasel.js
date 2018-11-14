@@ -1,13 +1,27 @@
 import {dom, DomElementMethod, styled} from 'grainjs';
+import {DomCreateFunc0} from 'grainjs';
 import defaults = require('lodash/defaults');
 import {IPopupOptions, setPopupToCreateDom} from './popup';
 
 /**
  * Tooltip accepts all the options of other popup methods, plus a couple more.
+ *
+ * If both .content and .title options are omitted, it shows triggerElem's title attribute (but
+ * note that browser's default behavior for showing title attribute remains; to avoid it, use the
+ * .title option and don't set triggerElem's attribute).
  */
 export interface ITooltipOptions extends IPopupOptions {
-  content?: DomElementMethod;   // If omitted, will use the "title" attribute of triggerElem.
-  title?: string;               // Default title when content is omitted, and triggerElem has no title.
+  content?: DomElementMethod;   // Use this for tooltip content, overriding 'title' attr or option.
+  title?: string;               // Tooltip title to show, when triggerElem has no title attribute.
+  theme?: ITooltipTheme;        // Allow using a custom CSS theme for the tooltip.
+}
+
+/**
+ * Theming the tooltip only requires theming the main element. It includes custom CSS properties
+ * for customizing the arrow as well (see cssTooltip below).
+ */
+export interface ITooltipTheme {
+  tooltip: DomCreateFunc0<Element>;
 }
 
 const defaultTooltipOptions: ITooltipOptions = {
@@ -30,82 +44,32 @@ export function tooltip(options?: ITooltipOptions): DomElementMethod {
 export function tooltipElem(triggerElem: Element, options: ITooltipOptions = {}): void {
   options = defaults({}, options, defaultTooltipOptions);
 
-  // The simple solution is this:
+  // Note that we do NOT turn off the element's title attribute (if present). Neither does the
+  // popper-tooltip library. The recommendation is simply to avoid the title attribute, and pass
+  // `title` (or `content`) as a tooltip option.
   return setPopupToCreateDom(triggerElem, () => _createDom(triggerElem, options), options);
-
-  // More involved, and less pleasant, perhaps unnecessarily, is this, which turns off the title,
-  // so that the native tooltip isn't shown while the custom one shows. Popper's tooltip.js
-  // library does NOT do such turning off, but examples don't use title attribute.
-  /*
-  function openFunc(ctl: IPopupControl) {
-    const title = triggerElem.getAttribute('title') || options.title || "";
-    triggerElem.removeAttribute('title');
-    const content = _createDom(triggerElem, opts, title);
-    function dispose() {
-      content.remove();
-      // Only restore the attribute if it's still absent.
-      if (!triggerElem.hasAttribute('title')) {
-        triggerElem.setAttribute('title', title);
-      }
-      domDispose(content);
-    }
-    return {content, dispose};
-  }
-  setPopupToFunc(triggerElem, openFunc, opts);
-  */
 }
-
-// TODO: this attempt exposes quite a bunch of problems with current design:
-// (1) openPopup() method needs triggerElem
-// (2) closePopup() vs dispose() distinction does not make sense.
-//     Should be enough to construct+dispose.
-// (3) responsibility for attaching/detaching isn't symmetrical: popup.js attaches but caller is
-//     supposed to detach.
-// (4) It's way more verbose than the functional way (ctor/dtor simplifications might improve)
-/*
-class Tooltip implements IPopupContent, IDisposable {
-  private _content?: Element;
-  private _title?: string;
-  private _triggerElem?: Element;
-
-  constructor(private _options: ITooltipOptions) {}
-  // Called when the popup needs to open. Should the popup element to render. If an arrow is
-  // desired, it should be an element matching `[x-arrow]` selector within Element.
-  public openPopup(triggerElem: Element, ctl: IPopupControl): Element {
-    this._title = triggerElem.getAttribute('title') || this._options.title || "";
-    this._triggerElem = triggerElem;
-    this._triggerElem.removeAttribute('title');
-    const opts: ITooltipOptions = {...defaultTooltipOptions, ...this._options};
-    this._content = _createDom(triggerElem, opts, this._title);
-    return this._content;
-  }
-  public closePopup(): void {
-    this._content!.remove();
-    if (!this._triggerElem!.hasAttribute('title')) {
-      this._triggerElem!.setAttribute('title', this._title!);
-    }
-    domDispose(this._content!);
-  }
-  public dispose() {
-    // noop
-  }
-}
-*/
 
 /**
  * Helper that creates an actual tooltip, with some styles and a little arrow.
  */
 function _createDom(triggerElem: Element, options: ITooltipOptions, title?: string) {
   if (!title) { title = triggerElem.getAttribute('title') || options.title || ""; }
-  return cssTooltip({role: 'tooltip'},
+  const theme = options.theme || defaultTooltipTheme;
+  return theme.tooltip({role: 'tooltip'},
     cssTooltipArrow({'x-arrow': true}),
     dom('div', options.content || dom.text(title)),
   );
 }
 
+// Note that we use two custom properties to make tooltips easier to customize:
+//    --tooltip-bg-color changes the background color for the tooltip and arrow.
+//    --tooltip-arrow-size sets the size of the tooltip arrow.
 const cssTooltip = styled('div', `
+  --tooltip-bg-color: #FFC107;
+  --tooltip-arrow-size: 5px;
   position: absolute;
-  background: #FFC107;
+  background: var(--tooltip-bg-color);
   color: black;
   width: 100px;
   border-radius: 3px;
@@ -113,58 +77,67 @@ const cssTooltip = styled('div', `
   padding: 10px;
   text-align: center;
 
-  &[x-placement^="bottom"] { margin-top: 5px; }
-  &[x-placement^="top"] { margin-bottom: 5px; }
-  &[x-placement^="left"] { margin-right: 5px; }
-  &[x-placement^="right"] { margin-left: 5px; }
+  &[x-placement^="bottom"] { margin-top: var(--tooltip-arrow-size); }
+  &[x-placement^="top"] { margin-bottom: var(--tooltip-arrow-size); }
+  &[x-placement^="left"] { margin-right: var(--tooltip-arrow-size); }
+  &[x-placement^="right"] { margin-left: var(--tooltip-arrow-size); }
 `);
 
 const cssTooltipArrow = styled('div', `
+  position: absolute;
   width: 0;
   height: 0;
-  border-style: solid;
-  border-color: #FFC107;
-  position: absolute;
-  margin: 5px;
+  border: solid transparent var(--tooltip-arrow-size);
 
   .${cssTooltip.className}[x-placement^="bottom"] & {
-    border-width: 0 5px 5px 5px;
-    border-left-color: transparent;
-    border-right-color: transparent;
-    border-top-color: transparent;
-    top: -5px;
-    left: calc(50% - 5px);
-    margin-top: 0;
-    margin-bottom: 0;
+    border-top-width: 0;
+    border-bottom-color: var(--tooltip-bg-color);
+    top: calc(var(--tooltip-arrow-size) * -1);
+    left: calc(50% - var(--tooltip-arrow-size));
+    margin: 0 var(--tooltip-arrow-size);
   }
   .${cssTooltip.className}[x-placement^="top"] & {
-    border-width: 5px 5px 0 5px;
-    border-left-color: transparent;
-    border-right-color: transparent;
-    border-bottom-color: transparent;
-    bottom: -5px;
-    left: calc(50% - 5px);
-    margin-top: 0;
-    margin-bottom: 0;
+    border-bottom-width: 0;
+    border-top-color: var(--tooltip-bg-color);
+    bottom: calc(var(--tooltip-arrow-size) * -1);
+    left: calc(50% - var(--tooltip-arrow-size));
+    margin: 0 var(--tooltip-arrow-size);
   }
   .${cssTooltip.className}[x-placement^="left"] & {
-    border-width: 5px 0 5px 5px;
-    border-top-color: transparent;
-    border-right-color: transparent;
-    border-bottom-color: transparent;
-    right: -5px;
-    top: calc(50% - 5px);
-    margin-left: 0;
-    margin-right: 0;
+    border-right-width: 0;
+    border-left-color: var(--tooltip-bg-color);
+    right: calc(var(--tooltip-arrow-size) * -1);
+    top: calc(50% - var(--tooltip-arrow-size));
+    margin: var(--tooltip-arrow-size) 0;
   }
   .${cssTooltip.className}[x-placement^="right"] & {
-    border-width: 5px 5px 5px 0;
-    border-left-color: transparent;
-    border-top-color: transparent;
-    border-bottom-color: transparent;
-    left: -5px;
-    top: calc(50% - 5px);
-    margin-left: 0;
-    margin-right: 0;
+    border-left-width: 0;
+    border-right-color: var(--tooltip-bg-color);
+    left: calc(var(--tooltip-arrow-size) * -1);
+    top: calc(50% - var(--tooltip-arrow-size));
+    margin: var(--tooltip-arrow-size) 0;
   }
 `);
+
+/**
+ * The default tooltip style; this one matches popper.js tooltip library.
+ */
+export const defaultTooltipTheme: ITooltipTheme = {
+  tooltip: cssTooltip,
+};
+
+export const cssDarkTooltip = styled(defaultTooltipTheme.tooltip, `
+  --tooltip-arrow-size: 6px;
+  --tooltip-bg-color: black;
+  color: white;
+  width: auto;
+  font-family: sans-serif;
+  font-size: 10pt;
+`);
+
+/**
+ * Offer another tooltip style, usable by passing {theme: darkTooltipTheme} in tooltip options.
+ */
+export const darkTooltipTheme: ITooltipTheme = {
+  tooltip: cssDarkTooltip,
+};
