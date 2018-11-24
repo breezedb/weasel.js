@@ -1,5 +1,4 @@
-import {dom, DomElementMethod, styled} from 'grainjs';
-import {DomCreateFunc0} from 'grainjs';
+import {dom, DomCreateFunc0, DomElementMethod, styled} from 'grainjs';
 import defaults = require('lodash/defaults');
 import {IPopupOptions, setPopupToCreateDom} from './popup';
 
@@ -37,30 +36,49 @@ const defaultTooltipOptions: ITooltipOptions = {
  *    dom('div', {title: "Hello"}, tooltip())
  *    dom('div', tooltip({content: () => dom('b', 'World'), placement: 'bottom'}))
  * It roughly replicates Popper's tooltip feautres from https://popper.js.org/tooltip-documentation.html
+ *
+ * Note that we do NOT turn off the element's title attribute (if present). Neither does the
+ * popper-tooltip library. The recommendation is simply to avoid the title attribute, and pass
+ * `title` (or `content`) as a tooltip option.
  */
 export function tooltip(options?: ITooltipOptions): DomElementMethod {
   return (elem) => tooltipElem(elem, options);
 }
 export function tooltipElem(triggerElem: Element, options: ITooltipOptions = {}): void {
   options = defaults({}, options, defaultTooltipOptions);
-
-  // Note that we do NOT turn off the element's title attribute (if present). Neither does the
-  // popper-tooltip library. The recommendation is simply to avoid the title attribute, and pass
-  // `title` (or `content`) as a tooltip option.
   return setPopupToCreateDom(triggerElem, () => _createDom(triggerElem, options), options);
 }
 
 /**
  * Helper that creates an actual tooltip, with some styles and a little arrow.
  */
-function _createDom(triggerElem: Element, options: ITooltipOptions, title?: string) {
-  if (!title) { title = triggerElem.getAttribute('title') || options.title || ""; }
+function _createDom(triggerElem: Element, options: ITooltipOptions) {
+  const title = triggerElem.getAttribute('title') || options.title || "";
   const theme = options.theme || defaultTooltipTheme;
   return theme.tooltip({role: 'tooltip'},
     cssTooltipArrow({'x-arrow': true}),
     dom('div', options.content || dom.text(title)),
   );
 }
+
+/*
+ * An alternative implementation could look like this. (This example is included to illustrate the
+ * usage of a class for a popup.)
+ *
+ * function tooltipElem(triggerElem: Element, options: ITooltipOptions = {}): void {
+ *   options = defaults({}, options, defaultTooltipOptions);
+ *   return setPopupToFunc(triggerElem, () => Tooltip.create(null, triggerElem, options), options);
+ * }
+ *
+ * class Tooltip extends Disposable {
+ *   public readonly content: Element;
+ *   constructor(triggerElem: Element, options: ITooltipOptions) {
+ *     super();
+ *     this.content = _createDom(triggerElem, options);
+ *     this.onDispose(() => domDispose(this.content));
+ *   }
+ * }
+ */
 
 // Note that we use two custom properties to make tooltips easier to customize:
 //    --tooltip-bg-color changes the background color for the tooltip and arrow.

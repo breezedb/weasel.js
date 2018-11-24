@@ -1,6 +1,7 @@
 import {Disposable, dom, domDispose, Holder, IDisposable} from 'grainjs';
 import debounce = require('lodash/debounce');
 import defaultsDeep = require('lodash/defaultsDeep');
+import noop = require('lodash/noop');
 import Popper from 'popper.js';
 
 /**
@@ -54,16 +55,11 @@ export interface IPopupControl {
 export interface IPopupContent {
   // Called when the popup needs to open. Should the popup element to render. If an arrow is
   // desired, it should be an element matching `[x-arrow]` selector within Element.
-  openPopup(ctl: IPopupControl): Element;
+  openPopup(triggerElem: Element, ctl: IPopupControl): Element;
 
   // Called when the popup is closed.
   closePopup(): void;
 }
-
-/**
- * Creator func used for the setPopupToCreate() method.
- */
-export type IPopupCreatorFunc = () => IPopupContent & IDisposable;
 
 /**
  * The return value for the openFunc used for the low-level setPopupToFunc() interface. To open a
@@ -157,6 +153,7 @@ class OpenPopupHelper extends Disposable implements IPopupControl {
     const containerElem = _getContainer(triggerElem, options.attach || null);
     if (containerElem) {
       containerElem.appendChild(content);
+      this.onDispose(() => content.remove());
     }
 
     this._popper = new Popper(triggerElem, content, popperOptions);
@@ -190,7 +187,7 @@ function _getContainer(elem: Element, attachElem: Element|string|null): Node|nul
  */
 export function setPopupToOpen(triggerElem: Element, popup: IPopupContent, options: IPopupOptions): void {
   const openFunc = (ctl: IPopupControl) => ({
-    content: popup.openPopup(ctl),
+    content: popup.openPopup(triggerElem, ctl),
     dispose: () => popup.closePopup(),
   });
   setPopupToFunc(triggerElem, openFunc, options);
@@ -199,12 +196,9 @@ export function setPopupToOpen(triggerElem: Element, popup: IPopupContent, optio
 /**
  * Attaches the given element on open, detaches it on close. Could be used e.g. for a static tooltip.
  */
-export function setPopupToAttach(triggerElem: Element, myDom: Element, options: IPopupOptions): void {
-  const openFunc = (ctl: IPopupControl) => ({
-    content: myDom,
-    dispose: () => myDom.remove(),
-  });
-  setPopupToFunc(triggerElem, openFunc, options);
+export function setPopupToAttach(triggerElem: Element, content: Element, options: IPopupOptions): void {
+  const openResult: IPopupOpenResult = {content, dispose: noop};
+  setPopupToFunc(triggerElem, () => openResult, options);
 }
 
 /**
@@ -213,34 +207,8 @@ export function setPopupToAttach(triggerElem: Element, myDom: Element, options: 
 export function setPopupToCreateDom(triggerElem: Element, domCreator: () => Element, options: IPopupOptions): void {
   function openFunc(ctl: IPopupControl) {
     const content = domCreator();
-    function dispose() { content.remove(); domDispose(content); }
+    function dispose() { domDispose(content); }
     return {content, dispose};
-  }
-  setPopupToFunc(triggerElem, openFunc, options);
-}
-
-// TODO: The attempt to use a class implementing IPopupContent for tooltip exposed quite a bunch
-// of problems with the current design:
-// (1) openPopup() method needs triggerElem
-// (3) responsibility for attaching/detaching isn't symmetrical: popup.js attaches but caller is
-//     supposed to detach.
-// (2) closePopup() vs dispose() distinction does not make sense. Should be enough to construct+dispose.
-//     The goal is for a single class to be usable in two ways; then it should be explained. Still
-//     there are questions: can openPopup() be called multiple times on one object?
-// (4) It's way more verbose than the functional way (ctor/dtor simplifications might improve this)
-/*
-
-/**
- * On opening the popup, calls the creator function, and .openPopup(ctl) on the created object. On
- * closing the popup, calls .closePopup() and then .dispose() on the created object.
- */
-export function setPopupToCreate(triggerElem: Element, creatorFunc: IPopupCreatorFunc, options: IPopupOptions): void {
-  function openFunc(ctl: IPopupControl): IPopupOpenResult {
-    const popup = creatorFunc();
-    return {
-      content: popup.openPopup(ctl),
-      dispose: () => { popup.closePopup(); popup.dispose(); },
-    };
   }
   setPopupToFunc(triggerElem, openFunc, options);
 }
