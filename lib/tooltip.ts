@@ -33,7 +33,7 @@ const defaultTooltipOptions: ITooltipOptions = {
 
 /**
  * Usage:
- *    dom('div', {title: "Hello"}, tooltip())
+ *    dom('div', tooltip({title: "Hello"}))
  *    dom('div', tooltip({content: () => dom('b', 'World'), placement: 'bottom'}))
  * It roughly replicates Popper's tooltip feautres from https://popper.js.org/tooltip-documentation.html
  *
@@ -46,7 +46,7 @@ export function tooltip(options?: ITooltipOptions): DomElementMethod {
 }
 export function tooltipElem(triggerElem: Element, options: ITooltipOptions = {}): void {
   options = defaults({}, options, defaultTooltipOptions);
-  return setPopupToCreateDom(triggerElem, () => _createDom(triggerElem, options), options);
+  setPopupToCreateDom(triggerElem, () => _createDom(triggerElem, options), options);
 }
 
 /**
