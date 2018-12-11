@@ -1,5 +1,6 @@
 import {Disposable, dom, domDispose, Holder, IDisposable} from 'grainjs';
 import defaultsDeep = require('lodash/defaultsDeep');
+import defaultTo = require('lodash/defaultTo');
 import noop = require('lodash/noop');
 import Popper from 'popper.js';
 
@@ -36,27 +37,23 @@ export interface IPopupOptions {
   // Some useful ones include:
   //  .offset.offset: Offset of popup relative to trigger. Default 0 (but affected by arrow).
   modifiers?: Popper.Modifiers;
+
+  // The popup controller is normally created automatically, but may be created separately in
+  // order to keep a reference to it; in that case it may be passed in with the options, and it is
+  // the caller's responsibility to ensure it gets disposed.
+  controller?: PopupControl;
 }
 
 /**
- * IPopupControl allows the popup instances to open/close/update the popup as needed.
+ * Type for the basic function which gets called to open a generic popup. The parameter allows
+ * extending IPopupOptions with extra parameters specific to a given popup.
  */
-export interface IPopupControl {
-  open(delayMs?: number, reopen?: boolean): void;
-  close(delayMs?: number): void;
-  toggle(): void;
-  isOpen(): boolean;
-  update(): void;
-}
+export type IPopupFunc<T extends IPopupOptions = IPopupOptions> =
+  (ctl: PopupControl<T>, options: T) => IPopupContent;
 
 /**
- * Type for the basic function which gets called to open a generic popup.
- */
-export type IPopupFunc = (ctl: IPopupControl) => IPopupContent;
-
-/**
- * Return value of IPopupFunc: a popup is a disposable object with the element to show in its
- * 'content' property. This object gets disposed when the popup is closed.
+ * Return value of IPopupFunc: a popup is a disposable object, whose .content property contains
+ * the element to show. This object gets disposed when the popup is closed.
  *
  * The first element in content matching the '[x-arrow]' selector will be used as the arrow.
  */
@@ -66,30 +63,34 @@ export interface IPopupContent extends IDisposable {
 
 /**
  * Type for a function to create a popup as a DOM element; usable with setPopupToCreateDom().
+ * This is a somewhat simpler interface than IPopupFunc.
  */
-export type IPopupDomCreator = (ctl: IPopupControl) => Element;
+export type IPopupDomCreator = (ctl: PopupControl) => Element;
 
 /**
- * The basic interface to attach a popup behavior to a trigger element. According to the requested
- * events on triggerElem, calls openFunc to open a popup, and disposes the returned value to close
- * it. The returned value is the same IPopupControl that gets passed to openFunc.
+ * The basic interface to attach popup behavior to a trigger element. According to options.trigger
+ * events events on triggerElem, calls openFunc(ctl, options) to open a popup, and disposes the
+ * returned value to close it. Returns the same controller that's passed to openFunc.
  *
  * Note that there is no default for options.trigger: if it's not specified, no events will
  * trigger this popup.
  */
-export function setPopupToFunc(triggerElem: Element, openFunc: IPopupFunc,
-                               options: IPopupOptions): IPopupControl {
-  const handler = PopupController.create(null, triggerElem, openFunc, options);
-  // Close popup on disposal of triggerElem.
-  dom.autoDisposeElem(triggerElem, handler);
-  return handler;
+export function setPopupToFunc<T extends IPopupOptions = IPopupOptions>(
+    triggerElem: Element, openFunc: IPopupFunc<T>, options: T): PopupControl<T> {
+  let ctl = options.controller as PopupControl<T>;
+  if (!ctl) {
+    ctl = PopupControl.create(null) as PopupControl<T>;
+    dom.autoDisposeElem(triggerElem, ctl);
+  }
+  ctl.attachElem(triggerElem, openFunc, options);
+  return ctl;
 }
 
 /**
  * Attaches the given element on open, detaches it on close. Useful e.g. for a static tooltip.
  */
 export function setPopupToAttach(triggerElem: Element, content: Element,
-                                 options: IPopupOptions): IPopupControl {
+                                 options: IPopupOptions): PopupControl {
   const openResult: IPopupContent = {content, dispose: noop};
   return setPopupToFunc(triggerElem, () => openResult, options);
 }
@@ -98,8 +99,8 @@ export function setPopupToAttach(triggerElem: Element, content: Element,
  * Attaches the element returned by the given func on open, detaches and disposes it on close.
  */
 export function setPopupToCreateDom(triggerElem: Element, domCreator: IPopupDomCreator,
-                                    options: IPopupOptions): IPopupControl {
-  function openFunc(ctl: IPopupControl) {
+                                    options: IPopupOptions): PopupControl {
+  function openFunc(ctl: PopupControl) {
     const content = domCreator(ctl);
     function dispose() { domDispose(content); }
     return {content, dispose};
@@ -111,30 +112,32 @@ export function setPopupToCreateDom(triggerElem: Element, domCreator: IPopupDomC
 type TimerId = ReturnType<typeof setTimeout>;
 
 /**
- * Implements the opening and closing of a popup. This object gets associated with a triggerElem
- * when a popup is configured, and subscribes to events as requested by the 'trigger' option.
+ * PopupControl allows the popup instances to open/close/update the popup as needed. The
+ * parameter T allows popups to understand extra options and receive them via the open() call.
  */
-class PopupController extends Disposable implements IPopupControl {
+export class PopupControl<T extends IPopupOptions = IPopupOptions> extends Disposable {
   private _holder = Holder.create<OpenPopupHelper>(this);
   private _closeTimer?: TimerId;
   private _openTimer?: TimerId;
-  private _open: () => void;
-  private _close: () => void;
-  private _showDelay: number;
-  private _hideDelay: number;
+  private _open: (opts: IPopupOptions) => void = noop;    // Only set once mounted.
+  private _close: () => void = noop;
+  private _showDelay: number = 0;
+  private _hideDelay: number = 0;
 
-  constructor(triggerElem: Element, openFunc: IPopupFunc, options: IPopupOptions) {
-    super();
+  public attachElem(triggerElem: Element, openFunc: IPopupFunc<T>, options: T): void {
     this._showDelay = options.showDelay || 0;
     this._hideDelay = options.hideDelay || 0;
-    this._open = () => {
+
+    this._open = (openOptions: IPopupOptions) => {
       this._openTimer = undefined;
-      OpenPopupHelper.create(this._holder, triggerElem, openFunc, options, this);
+      defaultsDeep(openOptions, options);
+      OpenPopupHelper.create(this._holder, triggerElem, openFunc as IPopupFunc, openOptions, this);
     };
     this._close = () => {
       this._closeTimer = undefined;
       this._holder.clear();
     };
+
     if (options.trigger) {
       for (const trigger of options.trigger) {
         switch (trigger) {
@@ -158,34 +161,36 @@ class PopupController extends Disposable implements IPopupControl {
    * Open the popup. If reopen is true, it would replace a current open popup; otherwise if
    * this popup is already opened, the call is ignored.
    */
-  public open(delay: number = this._showDelay, reopen: boolean = false) {
+  public open(options: Partial<T> = {}, reopen: boolean = false) {
+    const showDelay: number = defaultTo(options.showDelay, this._showDelay);
+
     // Ensure open() call cancels a delayed close() call.
     if (this._closeTimer) {
       clearTimeout(this._closeTimer);
       this._closeTimer = undefined;
     }
     if (reopen || (this._holder.isEmpty() && !this._openTimer)) {
-      this._openTimer = setTimeout(this._open, delay);
+      this._openTimer = setTimeout(() => this._open(options), showDelay);
     }
   }
 
   /**
    * Close the popup, if it is open.
    */
-  public close(delay: number = this._hideDelay) {
+  public close(delayMs: number = this._hideDelay) {
     // Ensure closing cancels a delayed opening and vice versa.
     if (this._openTimer) {
       clearTimeout(this._openTimer);
       this._openTimer = undefined;
     }
-    this._closeTimer = setTimeout(this._close, delay);
+    this._closeTimer = setTimeout(this._close, delayMs);
   }
 
   /**
    * Close the popup if it's open, open it otherwise.
    */
   public toggle() {
-    this._holder.isEmpty() ? this.open(undefined, true) : this.close();
+    this._holder.isEmpty() ? this.open({}, true) : this.close();
   }
 
   /**
@@ -211,9 +216,23 @@ class PopupController extends Disposable implements IPopupControl {
 class OpenPopupHelper extends Disposable {
   private _popper: Popper;
 
-  constructor(triggerElem: Element, openFunc: IPopupFunc, options: IPopupOptions, ctl: IPopupControl) {
+  constructor(triggerElem: Element, openFunc: IPopupFunc, options: IPopupOptions, ctl: PopupControl) {
     super();
 
+    // Once this object is disposed, unset all fields for easier detection of bugs.
+    this.wipeOnDispose();
+
+    // Call the opener function, and dispose the result when closed.
+    const {content} = this.autoDispose(openFunc(ctl, options));
+
+    // Find the requested attachment container.
+    const containerElem = _getContainer(triggerElem, options.attach || null);
+    if (containerElem) {
+      containerElem.appendChild(content);
+      this.onDispose(() => content.remove());
+    }
+
+    // Prepare and create the Popper instance, which places the content according to the options.
     const popperOptions: Popper.PopperOptions = {
       placement: options.placement,
       modifiers: (options.boundaries ?
@@ -224,20 +243,6 @@ class OpenPopupHelper extends Disposable {
         options.modifiers
       ),
     };
-
-    // Once this object is disposed, unset all fields for easier detection of bugs.
-    this.wipeOnDispose();
-
-    // Call the opener function, and dispose the result when closed.
-    const {content} = this.autoDispose(openFunc(ctl));
-
-    // Find the requested attachment container.
-    const containerElem = _getContainer(triggerElem, options.attach || null);
-    if (containerElem) {
-      containerElem.appendChild(content);
-      this.onDispose(() => content.remove());
-    }
-
     this._popper = new Popper(triggerElem, content, popperOptions);
     this.onDispose(() => this._popper.destroy());
 

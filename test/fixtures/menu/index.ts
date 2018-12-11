@@ -4,8 +4,7 @@
 // tslint:disable:no-console
 
 import {dom, makeTestId, styled, TestId} from 'grainjs';
-import {Menu, menu, menuItem, menuItemSubmenu} from '../../../lib/menu';
-import {IPopupControl} from '../../../lib/popup';
+import {menu, MenuItem, menuItem, menuItemSubmenu} from '../../../lib/menu';
 
 document.addEventListener('DOMContentLoaded', () => {
   document.body.appendChild(setupTest());
@@ -22,25 +21,25 @@ function setupTest() {
   );
 }
 
-function makeMenu(ctl: IPopupControl): Menu {
+function makeMenu(): MenuItem[] {
   console.log("makeMenu");
-  return Menu.create(null, ctl, [
+  return [
     menuItem(() => { console.log("Menu item: Cut"); }, "Cut"),
     menuItemSubmenu(makePasteSubmenu, "Paste Special"),
     menuItem(() => { console.log("Menu item: Copy"); }, "Copy"),
     menuItem(() => { console.log("Menu item: Paste"); }, "Paste"),
     menuItemSubmenu(makePasteSubmenu, "Paste Special"),
-  ]);
+  ];
 }
 
-function makePasteSubmenu(ctl: IPopupControl): Menu {
+function makePasteSubmenu(): MenuItem[] {
   console.log("makePasteSubmenu");
-  return Menu.create(null, ctl, [
+  return [
     menuItem(() => { console.log("Menu item: Cut2"); }, "Cut2"),
     menuItem(() => { console.log("Menu item: Copy2"); }, "Copy2"),
     menuItem(() => { console.log("Menu item: Paste2"); }, "Paste2"),
     menuItemSubmenu(makePasteSubmenu, "Paste Special2"),
-  ]);
+  ];
 }
 
 const cssExample = styled('div', `
