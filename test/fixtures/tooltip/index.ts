@@ -16,16 +16,16 @@ function setupTest() {
   // differently-positioned tooltps, and we'll check that hovering over each one causes 1 tooltip
   // to flip. We'll also include a body-attached tooltip which should overhang the box.
   return cssExample(testId('top'),
-    dom('div.side', {style: 'top: 30px; margin-top: auto;'},
+    dom('div.side', {style: 'top: 20px; margin-top: auto;'},
       dom('button', 'Body Top', addTooltips('body')),
       dom('button', 'Parent Top', addTooltips('parent', 'scrollParent'))),
-    dom('div.side', {style: 'right: 30px; margin-right: auto;'},
+    dom('div.side', {style: 'right: 20px; margin-right: auto;'},
       dom('button', 'Body Right', addTooltips('body')),
       dom('button', 'Parent Right', addTooltips('parent', 'scrollParent'))),
-    dom('div.side', {style: 'bottom: 30px; margin-bottom: auto;'},
+    dom('div.side', {style: 'bottom: 20px; margin-bottom: auto;'},
       dom('button', 'Body Bottom', addTooltips('body')),
       dom('button', 'Parent Bottom', addTooltips('parent', 'scrollParent'))),
-    dom('div.side', {style: 'left: 30px; margin-left: auto;'},
+    dom('div.side', {style: 'left: 20px; margin-left: auto;'},
       dom('button', 'Body Left', addTooltips('body')),
       dom('button', 'Parent Left', addTooltips('parent', 'scrollParent'))),
   );
