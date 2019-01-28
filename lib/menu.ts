@@ -7,9 +7,9 @@
  * attribute set. If unset, the item will not be selectable.
  *
  * Further, if `dom.data('menuItemSelected', (yesNo: boolean) => {})` is set, that callback will be
- * called whenever the item is selected and unselected, in addition to the item getting a
- * `menuItemSelected` css class added or removed. This should be seldom needed, but is needed for
- * nested menus.
+ * called whenever the item is selected and unselected. It may call onMenuItemSelected(yesNo) to keep
+ * the default behavior of getting the suitable css class. A callback should be seldom needed, but it
+ * is needed for nested menus.
  *
  * Clicks on items will normally propagate to the menu, where they get caught and close the menu.
  * If a click on an item should not close the menu, the item should stop the click's propagation.
@@ -122,8 +122,9 @@ export class Menu extends Disposable implements IPopupContent {
     this.onDispose(() => domDispose(this.content));
 
     if (options.startIndex !== undefined) {
-      // Cannot check which elements are visible (have an offset height) on creation since none
-      // of the items are attached to the dom yet.
+      // Not using isSelectable because it checks the offset height of the elements to determine
+      // visibility. None of the elements have an offset height on creation since they are not yet
+      // attached to the dom.
       const elems = Array.from(this.content.children).filter(elem => elem.hasAttribute('tabIndex'));
       this._selected.set(elems[options.startIndex]);
     }
@@ -134,21 +135,19 @@ export class Menu extends Disposable implements IPopupContent {
   private _nextIndex(): void {
     const elem = this._selected.get();
     const content = this.content;
-    if (elem) {
-      const getNext = (_elem: Element) => _elem.nextElementSibling || content.firstElementChild;
-      const next = getNextSelectable(elem, getNext);
-      if (next) { this._selected.set(next); }
-    }
+    const getNext = (_elem: Element|null) =>
+      (_elem && _elem.nextElementSibling) || content.firstElementChild;
+    const next = getNextSelectable(elem, getNext);
+    if (next) { this._selected.set(next); }
   }
 
   private _prevIndex(): void {
     const elem = this._selected.get();
     const content = this.content;
-    if (elem) {
-      const getNext = (_elem: Element) => _elem.previousElementSibling || content.lastElementChild;
-      const next = getNextSelectable(elem, getNext);
-      if (next) { this._selected.set(next); }
-    }
+    const getNext = (_elem: Element|null) =>
+      (_elem && _elem.previousElementSibling) || content.lastElementChild;
+    const next = getNextSelectable(elem, getNext);
+    if (next) { this._selected.set(next); }
   }
 
   private _onMouseOver(ev: MouseEvent) {
@@ -163,7 +162,7 @@ export class Menu extends Disposable implements IPopupContent {
  * Element (based on isSelectable). Returns null if the function to retrieve the next Element returns
  * null. Always returns startElem if returned by getNext function, to prevent an infinite loop.
  */
-function getNextSelectable(startElem: Element, getNext: (elem: Element) => Element|null): Element|null {
+function getNextSelectable(startElem: Element|null, getNext: (elem: Element|null) => Element|null): Element|null {
   let next = getNext(startElem);
   while (next && next !== startElem && !isSelectable(next)) { next = getNext(next); }
   return next;
