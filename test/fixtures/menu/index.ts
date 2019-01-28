@@ -2,15 +2,18 @@
  * This tests our tooltip implementation.
  */
 // tslint:disable:no-console
-
-import {dom, makeTestId, styled, TestId} from 'grainjs';
-import {menu, MenuItem, menuItem, menuItemSubmenu} from '../../../lib/menu';
+import {dom, DomElementArg, obsArray, observable, makeTestId, styled, TestId} from 'grainjs';
+import {cssMenuDivider, menu, menuItem, menuItemSubmenu} from '../../../lib/menu';
 
 document.addEventListener('DOMContentLoaded', () => {
   document.body.appendChild(setupTest());
 });
 
 const testId: TestId = makeTestId('test-');
+
+const hideCut = observable(false);
+const pasteList = obsArray(['Paste 1']);
+let pasteCount: number = 1;
 
 function setupTest() {
   // Create a rectangle, with a button along each edge. Each botton will have 4
@@ -21,18 +24,31 @@ function setupTest() {
   );
 }
 
-function makeMenu(): MenuItem[] {
+function makeMenu(): DomElementArg[] {
   console.log("makeMenu");
   return [
-    menuItem(() => { console.log("Menu item: Cut"); }, "Cut"),
+    menuItem(() => { console.log("Menu item: Cut"); }, "Cut", dom.hide(hideCut)),
     menuItemSubmenu(makePasteSubmenu, "Paste Special"),
     menuItem(() => { console.log("Menu item: Copy"); }, "Copy"),
-    menuItem(() => { console.log("Menu item: Paste"); }, "Paste"),
+    menuItem(() => {
+      console.log("Menu item: Paste");
+      pasteList.push(`Paste ${++pasteCount}`);
+    }, "Paste"),
+    cssMenuDivider(),
+    dom.forEach(pasteList, str =>
+      menuItem(() => { console.log(`Menu item: ${str}`); }, str)
+    ),
+    cssMenuDivider(),
+    menuItem(() => {
+      hideCut.set(!hideCut.get());
+      console.log("Menu item: Show/Hide Cut");
+    }, dom.text((use) => use(hideCut) ? "Show Cut" : "Hide Cut")),
+    cssMenuDivider(),
     menuItemSubmenu(makePasteSubmenu, "Paste Special"),
   ];
 }
 
-function makePasteSubmenu(): MenuItem[] {
+function makePasteSubmenu(): DomElementArg[] {
   console.log("makePasteSubmenu");
   return [
     menuItem(() => { console.log("Menu item: Cut2"); }, "Cut2"),
