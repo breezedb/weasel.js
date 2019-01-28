@@ -67,6 +67,11 @@ export function menuItem(action: () => void, ...args: DomElementArg[]): Element 
   );
 }
 
+export function onMenuItemSelected(yesNo: boolean, elem: Element) {
+  if (yesNo) { (elem as HTMLElement).focus(); }
+  elem.classList.toggle(menuItemSelectedClass);
+}
+
 const defaultMenuOptions: IMenuOptions = {
   attach: 'body',
   boundaries: 'viewport',
@@ -91,15 +96,12 @@ export class Menu extends Disposable implements IPopupContent {
     // Also focus the newly-selected element for keyboard events.
     this.autoDispose(this._selected.addListener((val: Element|null, prev: Element|null) => {
       if (val) {
-        (val as HTMLElement).focus();
-        val.classList.add('menuItemSelected');
-        const selectedCallback = dom.getData(val, 'menuItemSelected');
-        if (selectedCallback) { selectedCallback(true); }
+        const callback = dom.getData(val, menuItemSelectedClass) || onMenuItemSelected;
+        callback(true, val);
       }
       if (prev) {
-        prev.classList.remove('menuItemSelected');
-        const selectedCallback = dom.getData(prev, 'menuItemSelected');
-        if (selectedCallback) { selectedCallback(false); }
+        const callback = dom.getData(prev, menuItemSelectedClass) || onMenuItemSelected;
+        callback(false, prev);
       }
     }));
 
@@ -120,7 +122,9 @@ export class Menu extends Disposable implements IPopupContent {
     this.onDispose(() => domDispose(this.content));
 
     if (options.startIndex !== undefined) {
-      const elems = Array.from(this.content.children).filter(elem => isSelectable(elem));
+      // Cannot check which elements are visible (have an offset height) on creation since none
+      // of the items are attached to the dom yet.
+      const elems = Array.from(this.content.children).filter(elem => elem.hasAttribute('tabIndex'));
       this._selected.set(elems[options.startIndex]);
     }
 
@@ -157,8 +161,7 @@ export class Menu extends Disposable implements IPopupContent {
 /**
  * Given a starting Element and a function to retrieve the next Element, returns the next selectable
  * Element (based on isSelectable). Returns null if the function to retrieve the next Element returns
- * null. Always returns the starting element if given by the next Element function to prevent an
- * infinite loop.
+ * null. Always returns startElem if returned by getNext function, to prevent an infinite loop.
  */
 function getNextSelectable(startElem: Element, getNext: (elem: Element) => Element|null): Element|null {
   let next = getNext(startElem);
@@ -170,7 +173,8 @@ function getNextSelectable(startElem: Element, getNext: (elem: Element) => Eleme
  * Returns a boolean indicating whether the Element is selectable in the menu.
  */
 function isSelectable(elem: Element): boolean {
-  return elem.hasAttribute('tabIndex') && getComputedStyle(elem).display !== 'none';
+  // Offset height > 0 is used to determine if the element is visible.
+  return elem.hasAttribute('tabIndex') && (elem as HTMLElement).offsetHeight > 0;
 }
 
 /**
@@ -196,6 +200,7 @@ export function menuItemSubmenu(submenu: MenuCreateFunc, ...args: DomElementArg[
     modifiers: {preventOverflow: {padding: 10}},
     boundaries: 'viewport',
     controller: ctl,
+    attach: 'body',
     isSubMenu: true,
   };
 
@@ -205,7 +210,7 @@ export function menuItemSubmenu(submenu: MenuCreateFunc, ...args: DomElementArg[
     dom.autoDispose(ctl),
 
     // Set the submenu to be attached as a child of this element rather than as a sibling.
-    (elem: Element) => menuElem(elem, submenu, Object.assign(popupOptions, {attach: elem})),
+    menu(submenu, popupOptions),
 
     // On mouseover, open the submenu. Add a delay to avoid it on transient mouseovers.
     dom.on('mouseover', () => ctl.open({showDelay: 250})),
@@ -216,9 +221,11 @@ export function menuItemSubmenu(submenu: MenuCreateFunc, ...args: DomElementArg[
       Enter: () => ctl.open({startIndex: 0}),
     }),
 
-    // When selection changes, close the popup.
-    (elem: Element) => dom.dataElem(elem, 'menuItemSelected',
-      (yesNo: boolean) => yesNo || ctl.close()),
+    // When selection changes, use default behavior and also close the popup.
+    (elem: Element) => dom.dataElem(elem, menuItemSelectedClass, (yesNo: boolean) => {
+      onMenuItemSelected(yesNo, elem);
+      return yesNo || ctl.close();
+    }),
 
     // Clicks that open a submenu should not cause parent menu to close.
     dom.on('click', (ev) => { ev.stopPropagation(); }),
@@ -245,7 +252,7 @@ export const cssMenuItem = styled('li', `
   justify-content: space-between;
   outline: none;
 
-  &.menuItemSelected {
+  &-sel {
     background-color: #5AC09C;
     color: white;
   }
@@ -257,6 +264,8 @@ export const cssMenuDivider = styled('div', `
   margin: 4px 0;
   background-color: #D9D9D9;
 `);
+
+const menuItemSelectedClass = cssMenuItem.className + '-sel';
 
 // ----------------------------------------------------------------------
 // TODO: move this to grainjs
