@@ -24,6 +24,11 @@ export type MenuCreateFunc = (ctl: PopupControl) => DomElementArg[];
 export interface IMenuOptions extends IPopupOptions {
   startIndex?: number;
   isSubMenu?: boolean;
+  menuCssClass?: string;    // If provided, applies the css class to the menu container.
+}
+
+export interface ISubMenuOptions {
+  menuCssClass?: string;    // If provided, applies the css class to the menu container.
 }
 
 /**
@@ -32,6 +37,24 @@ export interface IMenuOptions extends IPopupOptions {
  *      menuItem(...),
  *      menuItem(...),
  *    ]))
+ *
+ * The appearance of the menu and menuItem components can be changed by setting the following
+ * css variables in the parent project:
+ *
+ *    --weaseljs-font-size
+ *    --weaseljs-font-family
+ *    --weaseljs-background-color
+ *    --weaseljs-color
+ *    --weaseljs-border
+ *    --weaseljs-border-radius
+ *    --weaseljs-box-shadow
+ *    --weaseljs-min-width
+ *    --weaseljs-menu-padding
+ *
+ *    --weaseljs-selected-background-color  (Applies to menuItem components only)
+ *    --weaseljs-selected-color             (Applies to menuItem components only)
+ *    --weaseljs-menu-item-padding          (Applies to menuItem components only)
+ *
  */
 export function menu(createFunc: MenuCreateFunc, options?: IMenuOptions): DomElementMethod {
   return (elem) => menuElem(elem, createFunc, options);
@@ -105,7 +128,8 @@ export class Menu extends Disposable implements IPopupContent {
       }
     }));
 
-    this.content = cssMenu(items,
+    this.content = cssMenu({class: options.menuCssClass || ''},
+      items,
       dom.on('mouseover', (ev) => this._onMouseOver(ev as MouseEvent)),
       dom.on('click', (ev) => ctl.close(0)),
       onKeyDown({
@@ -190,10 +214,14 @@ function findAncestorChild(ancestor: Element, elem: Element|null): Element|null 
 /**
  * Implements a menu item which opens a submenu.
  */
-export function menuItemSubmenu(submenu: MenuCreateFunc, ...args: DomElementArg[]): Element {
+export function menuItemSubmenu(
+  submenu: MenuCreateFunc,
+  options: ISubMenuOptions,
+  ...args: DomElementArg[]
+): Element {
   const ctl: PopupControl<IMenuOptions> = PopupControl.create(null);
 
-  const popupOptions: IMenuOptions = {
+  const popupOptions: IMenuOptions = Object.assign(options, {
     placement: 'right-start',
     trigger: ['click'],
     modifiers: {preventOverflow: {padding: 10}},
@@ -201,7 +229,7 @@ export function menuItemSubmenu(submenu: MenuCreateFunc, ...args: DomElementArg[
     controller: ctl,
     attach: 'body',
     isSubMenu: true,
-  };
+  });
 
   return cssMenuItem(...args,
     dom('div', '\u25B6'),     // A right-pointing triangle
@@ -233,27 +261,32 @@ export function menuItemSubmenu(submenu: MenuCreateFunc, ...args: DomElementArg[
 
 export const cssMenu = styled('ul', `
   position: absolute;
-  background: white;
-  color: #1D1729;
-  min-width: 160px;
   outline: none;
-  border-radius: 3px;
-  box-shadow: 0 0 2px rgba(0,0,0,0.5);
   list-style: none;
-  padding: 16px 0px;
   margin: 2px;
   text-align: left;
+
+  font-size:     var(--weaseljs-font-size, 13px);
+  font-family:   var(--weaseljs-font-family, sans-serif);
+  background:    var(--weaseljs-background-color, white);
+  color:         var(--weaseljs-color, #1D1729);
+  min-width:     var(--weaseljs-min-width, 160px);
+  border:        var(--weaseljs-border, none);
+  border-radius: var(--weaseljs-border-radius, 2px);
+  box-shadow:    var(--weaseljs-box-shadow, 0 0 2px rgba(0,0,0,0.5));
+  padding:       var(--weaseljs-menu-padding, 6px 0);
 `);
 
 export const cssMenuItem = styled('li', `
-  padding: 10px 16px;
   display: flex;
   justify-content: space-between;
   outline: none;
+  padding: var(--weaseljs-menu-item-padding, 8px 24px);
 
   &-sel {
-    background-color: #5AC09C;
-    color: white;
+    cursor: pointer;
+    background-color: var(--weaseljs-selected-background-color, #5AC09C);
+    color:            var(--weaseljs-selected-color, white);
   }
 `);
 

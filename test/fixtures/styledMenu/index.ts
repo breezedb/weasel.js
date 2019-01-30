@@ -2,7 +2,7 @@
  * This tests our tooltip implementation.
  */
 // tslint:disable:no-console
-import {dom, DomElementArg, obsArray, observable, makeTestId, styled, TestId} from 'grainjs';
+import {dom, DomElementArg, makeTestId, styled, TestId} from 'grainjs';
 import {cssMenuDivider, menu, menuItem, menuItemSubmenu} from '../../../lib/menu';
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -11,40 +11,39 @@ document.addEventListener('DOMContentLoaded', () => {
 
 const testId: TestId = makeTestId('test-');
 
-const hideCut = observable(false);
-const pasteList = obsArray(['Paste 1']);
-let pasteCount: number = 1;
+const funkyMenu = styled('div', `
+  --weaseljs-font-size: 15px;
+  --weaseljs-font-family: serif;
+  --weaseljs-background-color: DarkGray;
+  --weaseljs-color: white;
+  --weaseljs-min-width: 250px;
+  --weaseljs-box-shadow: 0 0 10px rgba(0, 0, 100, 0.5);
+  --weaseljs-border: 1px solid white;
+  --weaseljs-selected-background-color: white;
+  --weaseljs-selected-text-color: black;
+`);
+
+const options = {
+  menuCssClass: funkyMenu.className,
+};
 
 function setupTest() {
   // Create a rectangle, with a button along each edge. Each botton will have 4
   // differently-positioned tooltps, and we'll check that hovering over each one causes 1 tooltip
   // to flip. We'll also include a body-attached tooltip which should overhang the box.
   return cssExample(testId('top'),
-    dom('button', 'My Menu', menu(makeMenu)),
+    dom('button', 'My Menu', menu(makeMenu, options)),
   );
 }
 
 function makeMenu(): DomElementArg[] {
   console.log("makeMenu");
   return [
-    menuItem(() => { console.log("Menu item: Cut"); }, "Cut", dom.hide(hideCut)),
-    menuItemSubmenu(makePasteSubmenu, {}, "Paste Special"),
+    menuItem(() => { console.log("Menu item: Cut"); }, "Cut"),
+    menuItemSubmenu(makePasteSubmenu, options, "Paste Special"),
     menuItem(() => { console.log("Menu item: Copy"); }, "Copy"),
-    menuItem(() => {
-      console.log("Menu item: Paste");
-      pasteList.push(`Paste ${++pasteCount}`);
-    }, "Paste"),
     cssMenuDivider(),
-    dom.forEach(pasteList, str =>
-      menuItem(() => { console.log(`Menu item: ${str}`); }, str)
-    ),
-    cssMenuDivider(),
-    menuItem(() => {
-      hideCut.set(!hideCut.get());
-      console.log("Menu item: Show/Hide Cut");
-    }, dom.text((use) => use(hideCut) ? "Show Cut" : "Hide Cut")),
-    cssMenuDivider(),
-    menuItemSubmenu(makePasteSubmenu, {}, "Paste Special"),
+    menuItem(() => { console.log("Menu item: Paste"); }, "Paste"),
   ];
 }
 
@@ -54,7 +53,7 @@ function makePasteSubmenu(): DomElementArg[] {
     menuItem(() => { console.log("Menu item: Cut2"); }, "Cut2"),
     menuItem(() => { console.log("Menu item: Copy2"); }, "Copy2"),
     menuItem(() => { console.log("Menu item: Paste2"); }, "Paste2"),
-    menuItemSubmenu(makePasteSubmenu, {}, "Paste Special2"),
+    menuItemSubmenu(makePasteSubmenu, options, "Paste Special2"),
   ];
 }
 
