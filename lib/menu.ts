@@ -37,24 +37,6 @@ export interface ISubMenuOptions {
  *      menuItem(...),
  *      menuItem(...),
  *    ]))
- *
- * The appearance of the menu and menuItem components can be changed by setting the following
- * css variables in the parent project:
- *
- *    --weaseljs-font-size
- *    --weaseljs-font-family
- *    --weaseljs-background-color
- *    --weaseljs-color
- *    --weaseljs-border
- *    --weaseljs-border-radius
- *    --weaseljs-box-shadow
- *    --weaseljs-min-width
- *    --weaseljs-menu-padding
- *
- *    --weaseljs-selected-background-color  (Applies to menuItem components only)
- *    --weaseljs-selected-color             (Applies to menuItem components only)
- *    --weaseljs-menu-item-padding          (Applies to menuItem components only)
- *
  */
 export function menu(createFunc: MenuCreateFunc, options?: IMenuOptions): DomElementMethod {
   return (elem) => menuElem(elem, createFunc, options);
@@ -81,6 +63,12 @@ export function menuElem(triggerElem: Element, createFunc: MenuCreateFunc, optio
  *       href?: string;            // If present, item will be a link with this "href" attr
  *       download?: string;        // with href set, "download" attr (file name) for the link
  *    }
+ *
+ * The appearance of the menuItem components can be changed by setting the followingcss variables
+ * in the parent project:
+ *    --weaseljs-selected-background-color
+ *    --weaseljs-selected-color
+ *    --weaseljs-menu-item-padding
  */
 export function menuItem(action: () => void, ...args: DomElementArg[]): Element {
   return cssMenuItem(
@@ -221,7 +209,7 @@ export function menuItemSubmenu(
 ): Element {
   const ctl: PopupControl<IMenuOptions> = PopupControl.create(null);
 
-  const popupOptions: IMenuOptions = Object.assign(options, {
+  const popupOptions: IMenuOptions = {
     placement: 'right-start',
     trigger: ['click'],
     modifiers: {preventOverflow: {padding: 10}},
@@ -229,7 +217,8 @@ export function menuItemSubmenu(
     controller: ctl,
     attach: 'body',
     isSubMenu: true,
-  });
+    ...options
+  };
 
   return cssMenuItem(...args,
     dom('div', '\u25B6'),     // A right-pointing triangle
@@ -265,16 +254,15 @@ export const cssMenu = styled('ul', `
   list-style: none;
   margin: 2px;
   text-align: left;
-
-  font-size:     var(--weaseljs-font-size, 13px);
-  font-family:   var(--weaseljs-font-family, sans-serif);
-  background:    var(--weaseljs-background-color, white);
-  color:         var(--weaseljs-color, #1D1729);
-  min-width:     var(--weaseljs-min-width, 160px);
-  border:        var(--weaseljs-border, none);
-  border-radius: var(--weaseljs-border-radius, 2px);
-  box-shadow:    var(--weaseljs-box-shadow, 0 0 2px rgba(0,0,0,0.5));
-  padding:       var(--weaseljs-menu-padding, 6px 0);
+  font-size: 13px;
+  font-family: sans-serif;
+  background-color: white;
+  color: #1D1729;
+  min-width: 160px;
+  border: none;
+  border-radius: 2px;
+  box-shadow: 0 0 2px rgba(0,0,0,0.5);
+  padding: 6px 0;
 `);
 
 export const cssMenuItem = styled('li', `
