@@ -11,6 +11,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
 const testId: TestId = makeTestId('test-');
 
+const funkyMenu = styled('div', `
+  font-size: 18px;
+  font-family: serif;
+  background-color: DarkGray;
+  color: white;
+  min-width: 250px;
+  box-shadow: 0 0 10px rgba(0, 0, 100, 0.5);
+  border: 1px solid white;
+
+  --weaseljs-selected-background-color: white;
+  --weaseljs-selected-color: black;
+  --weaseljs-menu-item-padding: 20px;
+`);
+
+const funkyOptions = {
+  menuCssClass: funkyMenu.className,
+};
+
 const hideCut = observable(false);
 const pasteList = obsArray(['Paste 1']);
 let pasteCount: number = 1;
@@ -21,6 +39,7 @@ function setupTest() {
   // to flip. We'll also include a body-attached tooltip which should overhang the box.
   return cssExample(testId('top'),
     dom('button', 'My Menu', menu(makeMenu)),
+    dom('button', 'My Funky Menu', menu(makeFunkyMenu, funkyOptions))
   );
 }
 
@@ -28,7 +47,7 @@ function makeMenu(): DomElementArg[] {
   console.log("makeMenu");
   return [
     menuItem(() => { console.log("Menu item: Cut"); }, "Cut", dom.hide(hideCut)),
-    menuItemSubmenu(makePasteSubmenu, "Paste Special"),
+    menuItemSubmenu(makePasteSubmenu, {}, "Paste Special"),
     menuItem(() => { console.log("Menu item: Copy"); }, "Copy"),
     menuItem(() => {
       console.log("Menu item: Paste");
@@ -44,7 +63,7 @@ function makeMenu(): DomElementArg[] {
       console.log("Menu item: Show/Hide Cut");
     }, dom.text((use) => use(hideCut) ? "Show Cut" : "Hide Cut")),
     cssMenuDivider(),
-    menuItemSubmenu(makePasteSubmenu, "Paste Special"),
+    menuItemSubmenu(makePasteSubmenu, {}, "Paste Special"),
   ];
 }
 
@@ -54,7 +73,28 @@ function makePasteSubmenu(): DomElementArg[] {
     menuItem(() => { console.log("Menu item: Cut2"); }, "Cut2"),
     menuItem(() => { console.log("Menu item: Copy2"); }, "Copy2"),
     menuItem(() => { console.log("Menu item: Paste2"); }, "Paste2"),
-    menuItemSubmenu(makePasteSubmenu, "Paste Special2"),
+    menuItemSubmenu(makePasteSubmenu, {}, "Paste Special2"),
+  ];
+}
+
+function makeFunkyMenu(): DomElementArg[] {
+  console.log("makeFunkyMenu");
+  return [
+    menuItem(() => { console.log("Menu item: Cut"); }, "Cut"),
+    menuItemSubmenu(makeFunkySubmenu, funkyOptions, "Paste Special"),
+    menuItem(() => { console.log("Menu item: Copy"); }, "Copy"),
+    cssMenuDivider(),
+    menuItem(() => { console.log("Menu item: Paste"); }, "Paste"),
+  ];
+}
+
+function makeFunkySubmenu(): DomElementArg[] {
+  console.log("makeFunkySubmenu");
+  return [
+    menuItem(() => { console.log("Menu item: Cut2"); }, "Cut2"),
+    menuItem(() => { console.log("Menu item: Copy2"); }, "Copy2"),
+    menuItem(() => { console.log("Menu item: Paste2"); }, "Paste2"),
+    menuItemSubmenu(makeFunkySubmenu, funkyOptions, "Paste Special2"),
   ];
 }
 

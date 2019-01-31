@@ -24,6 +24,11 @@ export type MenuCreateFunc = (ctl: PopupControl) => DomElementArg[];
 export interface IMenuOptions extends IPopupOptions {
   startIndex?: number;
   isSubMenu?: boolean;
+  menuCssClass?: string;    // If provided, applies the css class to the menu container.
+}
+
+export interface ISubMenuOptions {
+  menuCssClass?: string;    // If provided, applies the css class to the menu container.
 }
 
 /**
@@ -58,6 +63,12 @@ export function menuElem(triggerElem: Element, createFunc: MenuCreateFunc, optio
  *       href?: string;            // If present, item will be a link with this "href" attr
  *       download?: string;        // with href set, "download" attr (file name) for the link
  *    }
+ *
+ * The appearance of the menuItem components can be changed by setting the followingcss variables
+ * in the parent project:
+ *    --weaseljs-selected-background-color
+ *    --weaseljs-selected-color
+ *    --weaseljs-menu-item-padding
  */
 export function menuItem(action: () => void, ...args: DomElementArg[]): Element {
   return cssMenuItem(
@@ -105,7 +116,8 @@ export class Menu extends Disposable implements IPopupContent {
       }
     }));
 
-    this.content = cssMenu(items,
+    this.content = cssMenu({class: options.menuCssClass || ''},
+      items,
       dom.on('mouseover', (ev) => this._onMouseOver(ev as MouseEvent)),
       dom.on('click', (ev) => ctl.close(0)),
       onKeyDown({
@@ -190,7 +202,11 @@ function findAncestorChild(ancestor: Element, elem: Element|null): Element|null 
 /**
  * Implements a menu item which opens a submenu.
  */
-export function menuItemSubmenu(submenu: MenuCreateFunc, ...args: DomElementArg[]): Element {
+export function menuItemSubmenu(
+  submenu: MenuCreateFunc,
+  options: ISubMenuOptions,
+  ...args: DomElementArg[]
+): Element {
   const ctl: PopupControl<IMenuOptions> = PopupControl.create(null);
 
   const popupOptions: IMenuOptions = {
@@ -201,6 +217,7 @@ export function menuItemSubmenu(submenu: MenuCreateFunc, ...args: DomElementArg[
     controller: ctl,
     attach: 'body',
     isSubMenu: true,
+    ...options
   };
 
   return cssMenuItem(...args,
@@ -233,27 +250,31 @@ export function menuItemSubmenu(submenu: MenuCreateFunc, ...args: DomElementArg[
 
 export const cssMenu = styled('ul', `
   position: absolute;
-  background: white;
-  color: #1D1729;
-  min-width: 160px;
   outline: none;
-  border-radius: 3px;
-  box-shadow: 0 0 2px rgba(0,0,0,0.5);
   list-style: none;
-  padding: 16px 0px;
   margin: 2px;
   text-align: left;
+  font-size: 13px;
+  font-family: sans-serif;
+  background-color: white;
+  color: #1D1729;
+  min-width: 160px;
+  border: none;
+  border-radius: 2px;
+  box-shadow: 0 0 2px rgba(0,0,0,0.5);
+  padding: 6px 0;
 `);
 
 export const cssMenuItem = styled('li', `
-  padding: 10px 16px;
   display: flex;
   justify-content: space-between;
   outline: none;
+  padding: var(--weaseljs-menu-item-padding, 8px 24px);
 
   &-sel {
-    background-color: #5AC09C;
-    color: white;
+    cursor: pointer;
+    background-color: var(--weaseljs-selected-background-color, #5AC09C);
+    color:            var(--weaseljs-selected-color, white);
   }
 `);
 
