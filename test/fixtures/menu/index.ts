@@ -70,6 +70,7 @@ function makeMenu(): DomElementArg[] {
 function makePasteSubmenu(): DomElementArg[] {
   console.log("makePasteSubmenu");
   return [
+    menuItem(() => {}, "Disabled", dom.boolAttr('disabled', true)),
     menuItem(() => { console.log("Menu item: Cut2"); }, "Cut2"),
     menuItem(() => { console.log("Menu item: Copy2"); }, "Copy2"),
     menuItem(() => { console.log("Menu item: Paste2"); }, "Paste2"),
