@@ -137,8 +137,11 @@ export class Menu extends Disposable implements IPopupContent {
       // Not using isSelectable because it checks the offset height of the elements to determine
       // visibility. None of the elements have an offset height on creation since they are not yet
       // attached to the dom.
-      const elems = Array.from(this.content.children).filter(elem => elem.hasAttribute('tabIndex'));
-      this._selected.set(elems[options.startIndex]);
+      const elems = Array.from(this.content.children).filter(elem =>
+        elem.hasAttribute('tabIndex') && !elem.hasAttribute('disabled'));
+      if (elems.length > options.startIndex) {
+        this._selected.set(elems[options.startIndex]);
+      }
     }
 
     FocusLayer.create(this, this.content);
@@ -185,7 +188,8 @@ function getNextSelectable(startElem: Element|null, getNext: (elem: Element|null
  */
 function isSelectable(elem: Element): boolean {
   // Offset height > 0 is used to determine if the element is visible.
-  return elem.hasAttribute('tabIndex') && (elem as HTMLElement).offsetHeight > 0;
+  return elem.hasAttribute('tabIndex') && !elem.hasAttribute('disabled') &&
+    (elem as HTMLElement).offsetHeight > 0;
 }
 
 /**
