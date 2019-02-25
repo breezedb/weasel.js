@@ -4,7 +4,7 @@
  *
  * The standard menu item offers enough flexibility to suffice for many needs, and may be replaced
  * entirely by a custom item. For an item to be a selectable menu item, it needs `tabindex=-1`
- * attribute set. If unset, or if the disabled attribute is set, the item will not be selectable.
+ * attribute set. If unset, or if the disabled class is set, the item will not be selectable.
  *
  * Further, if `dom.data('menuItemSelected', (yesNo: boolean) => {})` is set, that callback will be
  * called whenever the item is selected and unselected. It may call onMenuItemSelected(yesNo) to keep
@@ -138,7 +138,7 @@ export class Menu extends Disposable implements IPopupContent {
       // visibility. None of the elements have an offset height on creation since they are not yet
       // attached to the dom.
       const elems = Array.from(this.content.children).filter(elem =>
-        elem.hasAttribute('tabIndex') && !elem.hasAttribute('disabled'));
+        elem.hasAttribute('tabIndex') && !elem.classList.contains('disabled'));
       if (elems.length > options.startIndex) {
         this._selected.set(elems[options.startIndex]);
       }
@@ -188,7 +188,7 @@ function getNextSelectable(startElem: Element|null, getNext: (elem: Element|null
  */
 function isSelectable(elem: Element): boolean {
   // Offset height > 0 is used to determine if the element is visible.
-  return elem.hasAttribute('tabIndex') && !elem.hasAttribute('disabled') &&
+  return elem.hasAttribute('tabIndex') && !elem.classList.contains('disabled') &&
     (elem as HTMLElement).offsetHeight > 0;
 }
 
