@@ -4,7 +4,7 @@
  *
  * The standard menu item offers enough flexibility to suffice for many needs, and may be replaced
  * entirely by a custom item. For an item to be a selectable menu item, it needs `tabindex=-1`
- * attribute set. If unset, or if the disabled class is set, the item will not be selectable.
+ * attribute set. If unset, or if the "disabled" class is set, the item will not be selectable.
  *
  * Further, if `dom.data('menuItemSelected', (yesNo: boolean) => {})` is set, that callback will be
  * called whenever the item is selected and unselected. It may call onMenuItemSelected(yesNo) to keep
