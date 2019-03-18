@@ -6,25 +6,30 @@
  * entirely by a custom item. For an item to be a selectable menu item, it needs `tabindex=-1`
  * attribute set. If unset, or if the "disabled" class is set, the item will not be selectable.
  *
- * Further, if `dom.data('menuItemSelected', (yesNo: boolean) => {})` is set, that callback will be
- * called whenever the item is selected and unselected. It may call onMenuItemSelected(yesNo) to keep
- * the default behavior of getting the suitable css class. A callback should be seldom needed, but it
- * is needed for nested menus.
+ * Further, if `dom.data('menuItemSelected', (yesNo: boolean, elem) => {})` is set, that callback
+ * will be called whenever the item is selected and unselected. In addition, the selected item
+ * gets a css class. A callback should be seldom needed, but it is use for nested menus.
  *
  * Clicks on items will normally propagate to the menu, where they get caught and close the menu.
  * If a click on an item should not close the menu, the item should stop the click's propagation.
  */
 import {dom, domDispose, DomElementArg, DomElementMethod, styled} from 'grainjs';
-import {Disposable, Observable, observable, onKeyDown} from 'grainjs';
+import {Disposable, onKeyDown} from 'grainjs';
 import defaultsDeep = require('lodash/defaultsDeep');
-import {IPopupContent, IPopupOptions, PopupControl, setPopupToFunc} from './popup';
+import mergeWith = require('lodash/mergeWith');
+import {IOpenController, IPopupContent, IPopupOptions, PopupControl, setPopupToFunc} from './popup';
 
-export type MenuCreateFunc = (ctl: PopupControl) => DomElementArg[];
+export type MenuCreateFunc = (ctl: IOpenController) => DomElementArg[];
 
 export interface IMenuOptions extends IPopupOptions {
-  startIndex?: number;
   isSubMenu?: boolean;
+  selectOnOpen?: boolean;
   menuCssClass?: string;    // If provided, applies the css class to the menu container.
+
+  // If given, the menu will set the `weasel-popup-open` css class on the matching ancestor of the
+  // trigger element (in addition to setting it on the trigger element itself). Useful to keep an
+  // element highlighted while an associated menu is open.
+  parentSelectorToMark?: string;
 }
 
 export interface ISubMenuOptions {
@@ -42,7 +47,10 @@ export function menu(createFunc: MenuCreateFunc, options?: IMenuOptions): DomEle
   return (elem) => menuElem(elem, createFunc, options);
 }
 export function menuElem(triggerElem: Element, createFunc: MenuCreateFunc, options: IMenuOptions = {}) {
-  options = defaultsDeep({}, options, defaultMenuOptions);
+  // This is similar to defaultsDeep but avoids merging arrays, since options.trigger should have
+  // the exact value from options if present.
+  options = mergeWith({}, defaultMenuOptions, options,
+    (objValue: any, srcValue: any) => Array.isArray(srcValue) ? srcValue : undefined);
   setPopupToFunc(triggerElem,
     (ctl, opts) => Menu.create(null, ctl, createFunc(ctl), defaultsDeep(opts, options)),
     options);
@@ -50,19 +58,6 @@ export function menuElem(triggerElem: Element, createFunc: MenuCreateFunc, optio
 
 /**
  * Implements a single menu item.
- * TODO: support various useful options. For example, Grist's SelectMenu provides the following,
- * and also a SelectMenu.SEPARATOR element.
- *    interface SelectMenuItem {
- *       name: string;             // The name to show
- *       action?: () => void;      // If present, call this when the (non-disabled) item is clicked
- *       disabled?: boolean | () => boolean;   // When this item should be disabled
- *       show?: observable<boolean> | () => boolean;   // When to show this item
- *       hide?: observable<boolean> | () => boolean;   // When to hide this item
- *       icon?: Element;           // Icon to display to the left of the name
- *       shortcut?: Element;       // Representation of the shortcut key, right-aligned
- *       href?: string;            // If present, item will be a link with this "href" attr
- *       download?: string;        // with href set, "download" attr (file name) for the link
- *    }
  *
  * The appearance of the menuItem components can be changed by setting the followingcss variables
  * in the parent project:
@@ -78,9 +73,14 @@ export function menuItem(action: () => void, ...args: DomElementArg[]): Element 
   );
 }
 
-export function onMenuItemSelected(yesNo: boolean, elem: Element) {
-  if (yesNo) { (elem as HTMLElement).focus(); }
-  elem.classList.toggle(cssMenuItem.className + '-sel', yesNo);
+/**
+ * A version of menuItem that's an <a> link element.
+ */
+export function menuItemLink(...args: DomElementArg[]): Element {
+  return cssMenuItemLink({tabindex: '-1'}, cssMenuItem.cls(''), ...args,
+    // This prevents propagation, but NOT the default action, which is to open the link.
+    onKeyDown({Enter$: (ev) => ev.stopPropagation()})
+  );
 }
 
 const defaultMenuOptions: IMenuOptions = {
@@ -89,37 +89,38 @@ const defaultMenuOptions: IMenuOptions = {
   placement: 'bottom-start',
   showDelay: 0,
   trigger: ['click'],
+  modifiers: {
+    // gpuAcceleration (true by default) causes a tiny UI artifact: attempting to drag a link, at
+    // least in Firefox, causes it to be dragged from a different location on the screen where it
+    // actually is, which looks strange. Disabling has no noticeable downsides.
+    computeStyle: {gpuAcceleration: false}
+  },
 };
 
 /**
  * Implementation of the Menu. See menu() documentation for usage.
  */
 export class Menu extends Disposable implements IPopupContent {
-  public readonly content: Element;
+  public readonly content: HTMLElement;
 
-  private _selected: Observable<Element|null> = observable(null);
+  private _selected: HTMLElement|null = null;
 
-  constructor(ctl: PopupControl, items: DomElementArg[], options: IMenuOptions = {}) {
+  constructor(private ctl: IOpenController, items: DomElementArg[], options: IMenuOptions = {}) {
     super();
 
-    // When the selected element changes, update the classes of the formerly and newly-selected
-    // elements and call any callbacks bound to selection stored on the elements.
-    // Also focus the newly-selected element for keyboard events.
-    this.autoDispose(this._selected.addListener((val: Element|null, prev: Element|null) => {
-      if (val) {
-        const callback = dom.getData(val, 'menuItemSelected') || onMenuItemSelected;
-        callback(true, val);
+    // Set `weasel-popup-open` class on the ancestor of trigger that matches parentSelectorToMark.
+    if (options && options.parentSelectorToMark) {
+      const parent = ctl.getTriggerElem().closest(options.parentSelectorToMark);
+      if (parent) {
+        ctl.setOpenClass(parent);
       }
-      if (prev) {
-        const callback = dom.getData(prev, 'menuItemSelected') || onMenuItemSelected;
-        callback(false, prev);
-      }
-    }));
+    }
 
     this.content = cssMenu({class: options.menuCssClass || ''},
       items,
       dom.on('mouseover', (ev) => this._onMouseOver(ev as MouseEvent)),
-      dom.on('click', (ev) => this._findTargetItem(ev as MouseEvent) && ctl.close(0)),
+      dom.on('mouseleave', (ev) => this._onMouseLeave(ev as MouseEvent)),
+      dom.on('click', (ev) => this._findTargetItem(ev as MouseEvent) ? ctl.close(0) : ev.stopPropagation()),
       onKeyDown({
         ArrowDown: () => this._nextIndex(),
         ArrowUp: () => this._prevIndex(),
@@ -133,48 +134,78 @@ export class Menu extends Disposable implements IPopupContent {
     );
     this.onDispose(() => domDispose(this.content));
 
-    if (options.startIndex !== undefined) {
-      // Not using isSelectable because it checks the offset height of the elements to determine
-      // visibility. None of the elements have an offset height on creation since they are not yet
-      // attached to the dom.
-      const elems = Array.from(this.content.children).filter((elem) =>
-        elem.hasAttribute('tabIndex') && !elem.classList.contains('disabled'));
-      if (elems.length > options.startIndex) {
-        this._selected.set(elems[options.startIndex]);
-      }
-    }
+    setTimeout(() =>
+      (options.selectOnOpen ? this._nextIndex() : this.content.focus()), 0);
+  }
 
-    FocusLayer.create(this, this.content);
+  public onRemove() {
+    // The focus restoration is mainly needed for the sake of submenus. When focus has already
+    // moved elsewhere, don't restore it. We need to check it before the menu is removed from DOM.
+    if (this.content.contains(document.activeElement)) {
+      (this.ctl.getTriggerElem() as HTMLElement).focus();
+    }
   }
 
   private _nextIndex(): void {
-    const elem = this._selected.get();
-    const content = this.content;
-    const getNext = (_elem: Element|null) =>
-      (_elem && _elem.nextElementSibling) || content.firstElementChild;
-    const next = getNextSelectable(elem, getNext);
-    if (next) { this._selected.set(next); }
+    const next = getNextSelectable(this._selected,
+      (elem) => (elem && elem.nextElementSibling) || this.content.firstElementChild);
+    if (next) { this._setSelected(next); }
   }
 
   private _prevIndex(): void {
-    const elem = this._selected.get();
-    const content = this.content;
-    const getNext = (_elem: Element|null) =>
-      (_elem && _elem.previousElementSibling) || content.lastElementChild;
-    const next = getNextSelectable(elem, getNext);
-    if (next) { this._selected.set(next); }
+    const next = getNextSelectable(this._selected,
+      (elem) => (elem && elem.previousElementSibling) || this.content.lastElementChild);
+    if (next) { this._setSelected(next); }
   }
 
   private _onMouseOver(ev: MouseEvent) {
-    // Find immediate child of this.content which is an ancestor of ev.target.
     const elem = this._findTargetItem(ev);
-    if (elem) { this._selected.set(elem); }
+    if (!isMenuContainer(elem)) {
+      this._setSelected(elem);     // If elem is null, intentionally deselect.
+    }
   }
 
-  private _findTargetItem(ev: MouseEvent): Element|null {
-    const elem = findAncestorChild(this.content, ev.target as Element);
-    return elem && isSelectable(elem) && !elem.classList.contains(cssMenu.className) ? elem : null;
+  private _onMouseLeave(ev: MouseEvent) {
+    const elem = this._selected;
+    if (elem && !elem.classList.contains('weasel-popup-open')) {
+      // Don't deselect if there is an open submenu.
+      this._setSelected(null);
+    }
   }
+
+  private _findTargetItem(ev: MouseEvent): HTMLElement|null {
+    // Find immediate child of this.content which is an ancestor of ev.target.
+    const elem = findAncestorChild(this.content, ev.target as Element);
+    return elem && isSelectable(elem) ? elem : null;
+  }
+
+  // When the selected element changes, update the classes of the formerly and newly-selected
+  // elements and call any callbacks bound to selection stored on the elements.
+  // Also focus the newly-selected element for keyboard events.
+  private _setSelected(elem: HTMLElement|null) {
+    const prev = this._selected;
+    if (elem === prev) { return; }
+    if (prev) {
+      const callback = dom.getData(prev, 'menuItemSelected');
+      if (callback) { callback(false, prev); }
+      prev.classList.remove(cssMenuItem.className + '-sel');
+    }
+    if (elem) {
+      const callback = dom.getData(elem, 'menuItemSelected');
+      if (callback) { callback(true, elem); }
+      elem.classList.add(cssMenuItem.className + '-sel');
+    }
+    this._selected = elem;
+    // Focus the item if available, or the parent menu container otherwise.
+    (elem || this.content).focus();
+  }
+}
+
+/**
+ * Returns true if elem is a menu (or submenu) div.
+ */
+function isMenuContainer(elem: Element|null) {
+  return elem && elem.classList.contains(cssMenu.className);
 }
 
 /**
@@ -182,16 +213,17 @@ export class Menu extends Disposable implements IPopupContent {
  * Element (based on isSelectable). Returns null if the function to retrieve the next Element returns
  * null. Always returns startElem if returned by getNext function, to prevent an infinite loop.
  */
-function getNextSelectable(startElem: Element|null, getNext: (elem: Element|null) => Element|null): Element|null {
+function getNextSelectable(startElem: Element|null,
+                           getNext: (elem: Element|null) => Element|null): HTMLElement|null {
   let next = getNext(startElem);
   while (next && next !== startElem && !isSelectable(next)) { next = getNext(next); }
-  return next;
+  return next as HTMLElement|null;
 }
 
 /**
  * Returns a boolean indicating whether the Element is selectable in the menu.
  */
-function isSelectable(elem: Element): boolean {
+function isSelectable(elem: Element): elem is HTMLElement {
   // Offset height > 0 is used to determine if the element is visible.
   return elem.hasAttribute('tabIndex') && !elem.classList.contains('disabled') &&
     (elem as HTMLElement).offsetHeight > 0;
@@ -220,7 +252,7 @@ export function menuItemSubmenu(
 
   const popupOptions: IMenuOptions = {
     placement: 'right-start',
-    trigger: ['click'],
+    trigger: [],    // no "click": don't toggle this menu on click.
     modifiers: {preventOverflow: {padding: 10}},
     boundaries: 'viewport',
     controller: ctl,
@@ -238,19 +270,17 @@ export function menuItemSubmenu(
     menu(submenu, popupOptions),
 
     // On mouseover, open the submenu. Add a delay to avoid it on transient mouseovers.
-    dom.on('mouseover', () => ctl.open({showDelay: 250})),
+    dom.on('mouseenter', () => ctl.open({showDelay: 200})),
 
     // On right-arrow, open the submenu immediately, and select the first item automatically.
     onKeyDown({
-      ArrowRight: () => ctl.open({startIndex: 0}),
-      Enter: () => ctl.open({startIndex: 0}),
+      ArrowRight: () => ctl.open({selectOnOpen: true}),
+      Enter: () => ctl.open({selectOnOpen: true}),
     }),
 
     // When selection changes, use default behavior and also close the popup.
-    (elem: Element) => dom.dataElem(elem, 'menuItemSelected', (yesNo: boolean) => {
-      onMenuItemSelected(yesNo, elem);
-      return yesNo || ctl.close();
-    }),
+    (elem: Element) => dom.dataElem(elem, 'menuItemSelected',
+      (yesNo: boolean) => yesNo || ctl.close()),
 
     // Clicks that open a submenu should not cause parent menu to close.
     dom.on('click', (ev) => { ev.stopPropagation(); }),
@@ -285,6 +315,27 @@ export const cssMenuItem = styled('li', `
     background-color: var(--weaseljs-selected-background-color, #5AC09C);
     color:            var(--weaseljs-selected-color, white);
   }
+  &.disabled {
+    color: grey;
+  }
+`);
+
+export const cssMenuItemLink = styled('a', `
+  display: flex;
+  justify-content: space-between;
+  outline: none;
+  padding: var(--weaseljs-menu-item-padding, 8px 24px);
+  user-select: none;
+  -moz-user-select: none;
+
+  &, &:hover, &:focus {
+    color: inherit;
+    text-decoration: none;
+    outline: none;
+  }
+  &.${cssMenuItem.className}-sel {
+    color: var(--weaseljs-selected-color, white);
+  }
 `);
 
 export const cssMenuDivider = styled('div', `
@@ -293,16 +344,3 @@ export const cssMenuDivider = styled('div', `
   margin: 4px 0;
   background-color: #D9D9D9;
 `);
-
-// ----------------------------------------------------------------------
-
-class FocusLayer extends Disposable {
-  constructor(content: Element) {
-    super();
-    const previous: Element|null = document.activeElement;
-    if (previous) {
-      this.onDispose(() => (previous as HTMLElement).focus());
-    }
-    setTimeout(() => (content as HTMLElement).focus(), 0);
-  }
-}

@@ -2209,9 +2209,9 @@ graceful-fs@^4.1.11, graceful-fs@^4.1.15, graceful-fs@^4.1.2:
   resolved "https://registry.yarnpkg.com/graceful-fs/-/graceful-fs-4.1.15.tgz#ffb703e1066e8a0eeaa4c8b80ba9253eeefbfb00"
   integrity sha512-6uHUhOPEBgQ24HM+r6b/QwWfZq+yiFcipKFrOFiBEnWdy5sdzYoi+pJeQaPI5qOLRFqWmAXUPQNsielzdLoecA==
 
-"grainjs@git+https://github.com/gristlabs/grainjs.git#44d563adbab3730bd116cbbff73ee9842b289a53":
+"grainjs@git+https://github.com/gristlabs/grainjs.git#3d884cd7e7c10cd1c5179a605035a59aa8eab0d0":
   version "0.1.1"
-  resolved "git+https://github.com/gristlabs/grainjs.git#44d563adbab3730bd116cbbff73ee9842b289a53"
+  resolved "git+https://github.com/gristlabs/grainjs.git#3d884cd7e7c10cd1c5179a605035a59aa8eab0d0"
 
 growl@1.10.5:
   version "1.10.5"
@@ -3290,10 +3290,10 @@ mkdirp@0.5.1, mkdirp@^0.5.0, mkdirp@^0.5.1, mkdirp@~0.5.0:
   dependencies:
     minimist "0.0.8"
 
-mocha-webdriver@^0.1.6:
-  version "0.1.6"
-  resolved "https://registry.yarnpkg.com/mocha-webdriver/-/mocha-webdriver-0.1.6.tgz#aa4b6640c19a569d28028ff8464a734a8f6640cd"
-  integrity sha512-cd8T30PfidYry030xVNhGSo4YZyLyda8RBZKp5md06Fqh0fmJbHPhKAXLE/oGn0jw2ikmHgZhCjhNaSTffdvlw==
+mocha-webdriver@^0.1.7:
+  version "0.1.7"
+  resolved "https://registry.yarnpkg.com/mocha-webdriver/-/mocha-webdriver-0.1.7.tgz#d38e25ca371b14a393fc86825cf8fd4ac5aa93ce"
+  integrity sha512-N4xAoe/vtMWCt1fMeV5x9Hlvmb0wqa2e2ykJ3fzC5bnFZ4uJ3sYoT/DuZZRiQIRpwr2TIxmr2FUhv6pMbt5M6Q==
   dependencies:
     chai "^4.1.2"
     chai-as-promised "^7.1.1"
