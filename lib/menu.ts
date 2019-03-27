@@ -14,7 +14,7 @@
  * If a click on an item should not close the menu, the item should stop the click's propagation.
  */
 import {dom, domDispose, DomElementArg, DomElementMethod, styled} from 'grainjs';
-import {Disposable, onKeyDown} from 'grainjs';
+import {Disposable, onKeyDown, onKeyElem} from 'grainjs';
 import defaultsDeep = require('lodash/defaultsDeep');
 import mergeWith = require('lodash/mergeWith');
 import {IOpenController, IPopupContent, IPopupOptions, PopupControl, setPopupToFunc} from './popup';
@@ -108,6 +108,9 @@ export class Menu extends Disposable implements IPopupContent {
   constructor(private ctl: IOpenController, items: DomElementArg[], options: IMenuOptions = {}) {
     super();
 
+    // Indicates if the trigger element is an input.
+    const isInputTrigger = this.ctl.getTriggerElem().nodeName == "INPUT";
+
     // Set `weasel-popup-open` class on the ancestor of trigger that matches parentSelectorToMark.
     if (options && options.parentSelectorToMark) {
       const parent = ctl.getTriggerElem().closest(options.parentSelectorToMark);
@@ -116,15 +119,30 @@ export class Menu extends Disposable implements IPopupContent {
       }
     }
 
+    // Up/down navigation key handlers.
+    const navKeys = {
+      ArrowDown: () => this._nextIndex(),
+      ArrowUp: () => this._prevIndex()
+    };
+
+    // Add key handlers to the trigger element as well as the menu if it is an input.
+    let inputNavHandler;
+    if (isInputTrigger) {
+      inputNavHandler = onKeyElem(ctl.getTriggerElem(), 'keydown', {
+        ...navKeys,
+        Escape: () => ctl.close(0)
+      });
+    }
+
     this.content = cssMenu({class: options.menuCssClass || ''},
+      inputNavHandler ? dom.autoDispose(inputNavHandler) : null,
       items,
       dom.on('mouseover', (ev) => this._onMouseOver(ev as MouseEvent)),
       dom.on('mouseleave', (ev) => this._onMouseLeave(ev as MouseEvent)),
       dom.on('click', (ev) => this._findTargetItem(ev as MouseEvent) ? ctl.close(0) : ev.stopPropagation()),
       onKeyDown({
-        ArrowDown: () => this._nextIndex(),
-        ArrowUp: () => this._prevIndex(),
-        ... options.isSubMenu ? {
+        ...navKeys,
+        ...options.isSubMenu ? {
           ArrowLeft: () => ctl.close(0),
         } : {
           Escape: () => ctl.close(0),
@@ -134,8 +152,9 @@ export class Menu extends Disposable implements IPopupContent {
     );
     this.onDispose(() => domDispose(this.content));
 
+    // If the trigger element is an input, the menu should not immediately grab focus.
     setTimeout(() =>
-      (options.selectOnOpen ? this._nextIndex() : this.content.focus()), 0);
+      (options.selectOnOpen ? this._nextIndex() : isInputTrigger || this.content.focus()), 0);
   }
 
   public onRemove() {

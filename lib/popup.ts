@@ -8,7 +8,7 @@ import Popper from 'popper.js';
  * On what event the trigger element opens the popup. E.g. 'hover' is suitable for a tooltip,
  * while 'click' is suitable for a dropdown menu.
  */
-type Trigger  = 'click' | 'hover' | 'focus';
+type Trigger  = 'click' | 'hover' | 'focus' | 'keydown';
 
 /**
  * Options available to setPopup* methods.
@@ -179,6 +179,9 @@ export class PopupControl<T extends IPopupOptions = IPopupOptions> extends Dispo
           case 'hover':
             dom.onElem(triggerElem, 'mouseenter', () => this.open());
             dom.onElem(triggerElem, 'mouseleave', () => this.close());
+            break;
+          case 'keydown':
+            dom.onElem(triggerElem, 'keydown', () => this.open());
             break;
         }
       }
