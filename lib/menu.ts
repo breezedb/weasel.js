@@ -54,7 +54,7 @@ export function menuElem(triggerElem: Element, createFunc: MenuCreateFunc, optio
 
 /**
  * Attaches a select menu to its trigger element, for example:
- *    dom('div', 'Open menu', select((ctl) => [
+ *    dom('input', select((ctl) => [
  *      menuItem(...),
  *      menuItem(...),
  *    ]))
@@ -228,7 +228,6 @@ export class Menu extends BaseMenu implements IPopupContent {
   constructor(ctl: IOpenController, items: DomElementArg[], options: IMenuOptions = {}) {
     super(ctl, items, options);
 
-    // If the trigger element is an input, the menu should not immediately grab focus.
     setTimeout(() =>
       (options.selectOnOpen ? this.nextIndex() : this.content.focus()), 0);
   }
