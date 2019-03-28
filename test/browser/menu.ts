@@ -231,4 +231,36 @@ describe('menu', () => {
     assert.equal(await driver.find('.test-btn1').hasFocus(), false);
     assert.equal(await driver.find('.test-reset').hasFocus(), true);
   });
+
+  it('should not steal focus from input triggers', async function() {
+    // Check that menus set to input triggers open without stealing input focus.
+    await driver.find('.test-input1').click();
+    await driver.sendKeys('abcdefg');
+    assert.equal(await driver.find('.test-input1').getAttribute('value'), 'abcdefg');
+
+    // Check that enter triggers the input enter command, which clear the input.
+    await driver.sendKeys(Key.ENTER);
+    assert.equal(await driver.find('.test-input1').getAttribute('value'), '');
+    await driver.sendKeys(Key.ESCAPE);
+  });
+
+  it('should allow keyboard navigation from input triggers', async function() {
+    // Check that input triggers allow closing the menu.
+    await driver.find('.test-input1').click();
+    await driver.sendKeys('hello');
+    await assertOpen('.test-input1-menu', true);
+    await driver.sendKeys(Key.ESCAPE);
+    await assertOpen('.test-input1-menu', false);
+
+    // Check that input triggers allow navigation to menu items.
+    await driver.sendKeys('a');
+    await driver.sendKeys(Key.DOWN);
+    assert.equal(await driver.find('.test-input1-menu-item').hasFocus(), true);
+
+    // Check that enter triggers the menu item command, which closes the menu but does
+    // not clear the input.
+    await driver.sendKeys(Key.ENTER);
+    await assertOpen('.test-input1-menu', false);
+    assert.equal(await driver.find('.test-input1').getAttribute('value'), 'helloa');
+  });
 });

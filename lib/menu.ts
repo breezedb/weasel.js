@@ -14,12 +14,14 @@
  * If a click on an item should not close the menu, the item should stop the click's propagation.
  */
 import {dom, domDispose, DomElementArg, DomElementMethod, styled} from 'grainjs';
-import {Disposable, onKeyDown} from 'grainjs';
+import {Disposable, onKeyDown, onKeyElem} from 'grainjs';
 import defaultsDeep = require('lodash/defaultsDeep');
 import mergeWith = require('lodash/mergeWith');
 import {IOpenController, IPopupContent, IPopupOptions, PopupControl, setPopupToFunc} from './popup';
 
 export type MenuCreateFunc = (ctl: IOpenController) => DomElementArg[];
+
+type MenuClassCons = (context: any, ctl: IOpenController, items: DomElementArg[], options?: IMenuOptions) => BaseMenu;
 
 export interface IMenuOptions extends IPopupOptions {
   isSubMenu?: boolean;
@@ -47,12 +49,33 @@ export function menu(createFunc: MenuCreateFunc, options?: IMenuOptions): DomEle
   return (elem) => menuElem(elem, createFunc, options);
 }
 export function menuElem(triggerElem: Element, createFunc: MenuCreateFunc, options: IMenuOptions = {}) {
+  return baseElem((...args) => Menu.create(...args), triggerElem, createFunc, options);
+}
+
+/**
+ * Attaches a select menu to its trigger element, for example:
+ *    dom('input', select((ctl) => [
+ *      menuItem(...),
+ *      menuItem(...),
+ *    ]))
+ * The select menu differs from a normal menu in that focus is maintained on the triggerElem
+ * when the menu is open. This makes it ideal for input trigger elements and select widgets.
+ */
+export function select(createFunc: MenuCreateFunc, options?: IMenuOptions): DomElementMethod {
+  return (elem) => selectElem(elem, createFunc, options);
+}
+export function selectElem(triggerElem: Element, createFunc: MenuCreateFunc, options: IMenuOptions = {}) {
+  return baseElem((...args) => Select.create(...args), triggerElem, createFunc, options);
+}
+
+// Helper for menuElem and selectElem.
+function baseElem(createFn: MenuClassCons, triggerElem: Element, createFunc: MenuCreateFunc, options: IMenuOptions = {}) {
   // This is similar to defaultsDeep but avoids merging arrays, since options.trigger should have
   // the exact value from options if present.
   options = mergeWith({}, defaultMenuOptions, options,
     (objValue: any, srcValue: any) => Array.isArray(srcValue) ? srcValue : undefined);
   setPopupToFunc(triggerElem,
-    (ctl, opts) => Menu.create(null, ctl, createFunc(ctl), defaultsDeep(opts, options)),
+    (ctl, opts) => createFn(null, ctl, createFunc(ctl), defaultsDeep(opts, options)),
     options);
 }
 
@@ -98,9 +121,9 @@ const defaultMenuOptions: IMenuOptions = {
 };
 
 /**
- * Implementation of the Menu. See menu() documentation for usage.
+ * Implementation of the BaseMenu. Extended by Menu and Select.
  */
-export class Menu extends Disposable implements IPopupContent {
+class BaseMenu extends Disposable implements IPopupContent {
   public readonly content: HTMLElement;
 
   private _selected: HTMLElement|null = null;
@@ -122,9 +145,9 @@ export class Menu extends Disposable implements IPopupContent {
       dom.on('mouseleave', (ev) => this._onMouseLeave(ev as MouseEvent)),
       dom.on('click', (ev) => this._findTargetItem(ev as MouseEvent) ? ctl.close(0) : ev.stopPropagation()),
       onKeyDown({
-        ArrowDown: () => this._nextIndex(),
-        ArrowUp: () => this._prevIndex(),
-        ... options.isSubMenu ? {
+        ArrowDown: () => this.nextIndex(),
+        ArrowUp: () => this.prevIndex(),
+        ...options.isSubMenu ? {
           ArrowLeft: () => ctl.close(0),
         } : {
           Escape: () => ctl.close(0),
@@ -133,9 +156,6 @@ export class Menu extends Disposable implements IPopupContent {
       }),
     );
     this.onDispose(() => domDispose(this.content));
-
-    setTimeout(() =>
-      (options.selectOnOpen ? this._nextIndex() : this.content.focus()), 0);
   }
 
   public onRemove() {
@@ -146,13 +166,13 @@ export class Menu extends Disposable implements IPopupContent {
     }
   }
 
-  private _nextIndex(): void {
+  protected nextIndex(): void {
     const next = getNextSelectable(this._selected,
       (elem) => (elem && elem.nextElementSibling) || this.content.firstElementChild);
     if (next) { this._setSelected(next); }
   }
 
-  private _prevIndex(): void {
+  protected prevIndex(): void {
     const next = getNextSelectable(this._selected,
       (elem) => (elem && elem.previousElementSibling) || this.content.lastElementChild);
     if (next) { this._setSelected(next); }
@@ -198,6 +218,34 @@ export class Menu extends Disposable implements IPopupContent {
     this._selected = elem;
     // Focus the item if available, or the parent menu container otherwise.
     (elem || this.content).focus();
+  }
+}
+
+/**
+ * Implementation of the Menu. See menu() documentation for usage.
+ */
+export class Menu extends BaseMenu implements IPopupContent {
+  constructor(ctl: IOpenController, items: DomElementArg[], options: IMenuOptions = {}) {
+    super(ctl, items, options);
+
+    setTimeout(() =>
+      (options.selectOnOpen ? this.nextIndex() : this.content.focus()), 0);
+  }
+}
+
+/**
+ * Implementation of the Select. See select() documentation for usage.
+ */
+export class Select extends BaseMenu implements IPopupContent {
+  constructor(ctl: IOpenController, items: DomElementArg[], options: IMenuOptions = {}) {
+    super(ctl, items, options);
+
+    // Add key handlers to the trigger element as well as the menu if it is an input.
+    this.autoDispose(onKeyElem(ctl.getTriggerElem(), 'keydown', {
+      ArrowDown: () => this.nextIndex(),
+      ArrowUp: () => this.prevIndex(),
+      Escape: () => ctl.close(0)
+    }));
   }
 }
 
