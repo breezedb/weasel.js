@@ -4,6 +4,7 @@
 // tslint:disable:no-console
 import {dom, DomElementArg, input, makeTestId, obsArray, observable, styled, TestId} from 'grainjs';
 import {cssMenuDivider, IOpenController, menu, menuItem, menuItemLink, menuItemSubmenu} from '../../index';
+import {select} from '../../index';
 
 const testId: TestId = makeTestId('test-');
 const lastAction = observable("");
@@ -15,6 +16,12 @@ function setupTest() {
     console.log("Enter key triggered on input");
     inputObs.set("");
   };
+  // Triggers the input menu on 'input' events, if the input has text inside.
+  function inputTrigger(triggerElem: Element, ctl: PopupControl): void {
+    dom.onElem(triggerElem, 'input', () => {
+      triggerElem.value.length > 0 ? ctl.open() : ctl.close();
+    });
+  };
 
   return cssExample(testId('top'),
     // tabindex makes it focusable, allowing us to test focus restore issues.
@@ -23,7 +30,7 @@ function setupTest() {
     cssButton('My Funky Menu', menu(makeFunkyMenu, funkyOptions)),
     cssInputContainer(
       cssInput(inputObs, {onInput: true}, {placeholder: 'My Input Menu'},
-        menu(makeInputMenu, {trigger: ['keydown'], attach: null, menuCssClass: cssInputMenu.className}),
+        select(makeInputMenu, {trigger: [inputTrigger], attach: null, menuCssClass: cssInputMenu.className}),
         dom.onKeyPress({Enter: submitInput}),
         testId('input1')
       )

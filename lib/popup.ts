@@ -8,7 +8,13 @@ import Popper from 'popper.js';
  * On what event the trigger element opens the popup. E.g. 'hover' is suitable for a tooltip,
  * while 'click' is suitable for a dropdown menu.
  */
-type Trigger  = 'click' | 'hover' | 'focus' | 'keydown';
+type Trigger  = 'click' | 'hover' | 'focus' | AttachTriggerFunc;
+
+/**
+ * AttachTriggerFunc allows setting custom trigger events in a callback function to toggle the
+ * menu open state.
+ */
+type AttachTriggerFunc = (triggerElem: Element, ctl: PopupControl) => void;
 
 /**
  * Options available to setPopup* methods.
@@ -168,21 +174,23 @@ export class PopupControl<T extends IPopupOptions = IPopupOptions> extends Dispo
 
     if (options.trigger) {
       for (const trigger of options.trigger) {
-        switch (trigger) {
-          case 'click':
-            dom.onElem(triggerElem, 'click', () => this.toggle());
-            break;
-          case 'focus':
-            dom.onElem(triggerElem, 'focus', () => this.open());
-            dom.onElem(triggerElem, 'blur', () => this.close());
-            break;
-          case 'hover':
-            dom.onElem(triggerElem, 'mouseenter', () => this.open());
-            dom.onElem(triggerElem, 'mouseleave', () => this.close());
-            break;
-          case 'keydown':
-            dom.onElem(triggerElem, 'keydown', () => this.open());
-            break;
+        if (typeof trigger === 'function') {
+          // Call instances of AttachTriggerFunc to attach any custom trigger events.
+          trigger(triggerElem, this);
+        } else {
+          switch (trigger) {
+            case 'click':
+              dom.onElem(triggerElem, 'click', () => this.toggle());
+              break;
+            case 'focus':
+              dom.onElem(triggerElem, 'focus', () => this.open());
+              dom.onElem(triggerElem, 'blur', () => this.close());
+              break;
+            case 'hover':
+              dom.onElem(triggerElem, 'mouseenter', () => this.open());
+              dom.onElem(triggerElem, 'mouseleave', () => this.close());
+              break;
+          }
         }
       }
     }
