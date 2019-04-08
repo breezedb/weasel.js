@@ -3,7 +3,8 @@
  */
 // tslint:disable:no-console
 import {dom, DomElementArg, input, makeTestId, obsArray, observable, styled, TestId} from 'grainjs';
-import {cssMenuDivider, IOpenController, menu, menuItem, menuItemLink, menuItemSubmenu} from '../../index';
+import {cssMenuDivider, menu, menuItem, menuItemLink, menuItemSubmenu} from '../../index';
+import {IOpenController, PopupControl} from '../../index';
 import {select} from '../../index';
 
 const testId: TestId = makeTestId('test-');
@@ -15,18 +16,23 @@ function setupTest() {
   function submitInput() {
     console.log("Enter key triggered on input");
     inputObs.set("");
-  };
+  }
   // Triggers the input menu on 'input' events, if the input has text inside.
   function inputTrigger(triggerElem: Element, ctl: PopupControl): void {
     dom.onElem(triggerElem, 'input', () => {
-      triggerElem.value.length > 0 ? ctl.open() : ctl.close();
+      (triggerElem as HTMLInputElement).value.length > 0 ? ctl.open() : ctl.close();
     });
-  };
+  }
 
   return cssExample(testId('top'),
     // tabindex makes it focusable, allowing us to test focus restore issues.
     cssButton('My Menu', menu(makeMenu, {parentSelectorToMark: '.' + cssExample.className}),
       testId('btn1'), {tabindex: "-1"}),
+    cssButton('My Contextmenu', menu(makeMenu, {
+      trigger: ['contextmenu'],
+      parentSelectorToMark: '.' + cssExample.className
+    }),
+      testId('btn2'), {tabindex: "-1"}),
     cssButton('My Funky Menu', menu(makeFunkyMenu, funkyOptions)),
     cssInputContainer(
       cssInput(inputObs, {onInput: true}, {placeholder: 'My Input Menu'},
@@ -117,7 +123,7 @@ function makeInputMenu(): DomElementArg[] {
   console.log("makeInputMenu");
   return [
     testId('input1-menu'),
-    menuItem(() => { console.log(`Menu item: ${inputObs.get()}`)},
+    menuItem(() => { console.log(`Menu item: ${inputObs.get()}`); },
       dom.text((use) => `Log "${use(inputObs)}"`),
       testId('input1-menu-item')
     )
@@ -183,17 +189,17 @@ const cssFunkyMenu = styled('div', `
 const cssInputContainer = styled('div', `
   position: relative;
   width: 400px;
-`)
+`);
 
 const cssInput = styled(input, `
   width: 100%;
   height: 20px;
   margin: 0 0 16px 0;
-`)
+`);
 
 const cssInputMenu = styled('div', `
   min-width: 100%;
-`)
+`);
 
 const funkyOptions = {
   menuCssClass: cssFunkyMenu.className,

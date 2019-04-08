@@ -33,6 +33,24 @@ describe('menu', () => {
     await assert.isRejected(driver.find('.test-copy'), /Unable to locate/);
   });
 
+  it('should open on contextmenu', async function() {
+    // Open contextmenu, check we see something.
+    const btn = await driver.find('.test-btn2');
+    await driver.actions().contextClick(btn).perform();
+    await assertOpen('.test-menu1', true);
+    assert.equal(await driver.find('.test-copy').getText(), 'Copy');
+
+    // Open contextmenu again, should reopen
+    await driver.actions().contextClick(btn).perform();
+    await assertOpen('.test-menu1', true);
+    assert.equal(await driver.find('.test-copy').getText(), 'Copy');
+
+    // Click element, should close
+    await btn.click();
+    await assertOpen('.test-menu1', false);
+    await assert.isRejected(driver.find('.test-copy'), /Unable to locate/);
+  });
+
   it('should take action and close on item click unless disabled', async function() {
     // Open menu.
     await driver.find('.test-btn1').click();
