@@ -26,13 +26,19 @@ function setupTest() {
 
   return cssExample(testId('top'),
     // tabindex makes it focusable, allowing us to test focus restore issues.
-    cssButton('My Menu', menu(makeMenu, {parentSelectorToMark: '.' + cssExample.className}),
-      testId('btn1'), {tabindex: "-1"}),
-    cssButton('My Contextmenu', menu(makeMenu, {
-      trigger: ['contextmenu'],
-      parentSelectorToMark: '.' + cssExample.className
-    }),
-      testId('btn2'), {tabindex: "-1"}),
+    cssButton('My Menu',
+      testId('btn1'),
+      { tabindex: "-1" },
+      menu(makeMenu, { parentSelectorToMark: '.' + cssExample.className })
+    ),
+    cssButton('My Contextmenu',
+      testId('btn2'),
+      { tabindex: "-1" },
+      menu(makeMenu, {
+        trigger: ['contextmenu'],
+        parentSelectorToMark: '.' + cssExample.className
+      })
+    ),
     cssButton('My Funky Menu', menu(makeFunkyMenu, funkyOptions)),
     cssInputContainer(
       cssInput(inputObs, {onInput: true}, {placeholder: 'My Input Menu'},

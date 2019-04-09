@@ -187,6 +187,8 @@ export class PopupControl<T extends IPopupOptions = IPopupOptions> extends Dispo
                 ev.preventDefault(); // Prevent the default browser contextmenu behavior
                 this.open();
               });
+              // Popups are usually closed by a click outside of triggerElem and popup content,
+              // but in this case we want clicks on triggerElem to close as well.
               dom.onElem(triggerElem, 'click', () => this.close());
               break;
             case 'focus':
