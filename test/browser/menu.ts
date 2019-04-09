@@ -36,13 +36,12 @@ describe('menu', () => {
   it('should open on contextmenu', async function() {
     // Open contextmenu, check we see something.
     const btn = await driver.find('.test-btn2');
-    const actions = driver.actions({bridge: true});
-    await actions.contextClick(btn).perform();
+    await driver.withActions((a: any) => a.contextClick(btn));
     await assertOpen('.test-menu1', true);
     assert.equal(await driver.find('.test-copy').getText(), 'Copy');
 
     // Open contextmenu again, should reopen
-    await actions.contextClick(btn).perform();
+    await driver.withActions((a: any) => a.contextClick(btn));
     await assertOpen('.test-menu1', true);
     assert.equal(await driver.find('.test-copy').getText(), 'Copy');
 
