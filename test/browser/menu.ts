@@ -152,7 +152,7 @@ describe('menu', () => {
 
     // Mouse over on submenu item opens the submenu.
     await driver.find('.test-sub-item').mouseMove();
-    await driver.findWait(1, '.test-submenu1');
+    await driver.findWait('.test-submenu1', 1000);
     await assertOpen('.test-submenu1', true);
 
     // Click on an item in the submenu runs the action and closes both menus.
@@ -206,7 +206,7 @@ describe('menu', () => {
     // Opent the menu and submenu.
     await driver.find('.test-btn1').mouseMove().click();
     await driver.find('.test-sub-item').mouseMove();
-    await driver.findWait(1, '.test-submenu1');
+    await driver.findWait('.test-submenu1', 1000);
     await assertOpen('.test-submenu1', true);
 
     // Mouse over a different parent item.
