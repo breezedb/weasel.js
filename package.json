@@ -28,7 +28,7 @@
   },
   "homepage": "https://github.com/gristlabs/weasel.js#readme",
   "dependencies": {
-    "grainjs": "git+https://github.com/gristlabs/grainjs.git#877dde911489c9dfde22141470400dec20fd7c82",
+    "grainjs": "git+https://github.com/gristlabs/grainjs.git#c6919ac94e20f54ca625f6bf064aef3fb9f46051",
     "lodash": "^4.17.11",
     "popper.js": "1.15.0"
   },
