@@ -9,8 +9,7 @@
     "test": "mocha 'test/browser/**/*.{js,ts}'",
     "test-debug": "mocha --bail test/browser/**/*.{js,ts} --no-exit",
     "test-manual": "webpack-dev-server --config test/fixtures/webpack.config.js",
-    "prepack": "[ ! -f .buildme ] || npm run build",
-    "preinstall": "[ ! -f .buildme ] || npm run build"
+    "prepack": "npm run build && npm test"
   },
   "files": [
     "dist",
@@ -28,7 +27,7 @@
   },
   "homepage": "https://github.com/gristlabs/weasel.js#readme",
   "dependencies": {
-    "grainjs": "git+https://github.com/gristlabs/grainjs.git#c6919ac94e20f54ca625f6bf064aef3fb9f46051",
+    "grainjs": "^1.0.0",
     "lodash": "^4.17.11",
     "popper.js": "1.15.0"
   },
