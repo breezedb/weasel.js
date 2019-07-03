@@ -1,4 +1,4 @@
-# weasel.js
+# popweasel
 Collection of UI elements that behave as popovers
 
 ## Static Menus
