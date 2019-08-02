@@ -18,6 +18,7 @@ import {Disposable, onKeyDown, onKeyElem} from 'grainjs';
 import defaultsDeep = require('lodash/defaultsDeep');
 import mergeWith = require('lodash/mergeWith');
 import {IOpenController, IPopupContent, IPopupOptions, PopupControl, setPopupToFunc} from './popup';
+import {ISelectOptions} from './select';
 
 export type MenuCreateFunc = (ctl: IOpenController) => DomElementArg[];
 
@@ -53,24 +54,24 @@ export function menuElem(triggerElem: Element, createFunc: MenuCreateFunc, optio
 }
 
 /**
- * Attaches a select menu to its trigger element, for example:
+ * Attaches an inputSelect menu to its trigger element, for example:
  *    dom('input', select((ctl) => [
  *      menuItem(...),
  *      menuItem(...),
  *    ]))
- * The select menu differs from a normal menu in that focus is maintained on the triggerElem
+ * The inputSelect menu differs from a normal menu in that focus is maintained on the triggerElem
  * when the menu is open. This makes it ideal for input trigger elements and select widgets.
  */
-export function select(createFunc: MenuCreateFunc, options?: IMenuOptions): DomElementMethod {
-  return (elem) => selectElem(elem, createFunc, options);
+export function inputSelect(createFunc: MenuCreateFunc, options?: IMenuOptions): DomElementMethod {
+  return (elem) => inputSelectElem(elem, createFunc, options);
 }
-export function selectElem(triggerElem: Element, createFunc: MenuCreateFunc, options: IMenuOptions = {}) {
-  return baseElem((...args) => Select.create(...args), triggerElem, createFunc, options);
+export function inputSelectElem(triggerElem: Element, createFunc: MenuCreateFunc, options: IMenuOptions = {}) {
+  return baseElem((...args) => InputSelect.create(...args), triggerElem, createFunc, options);
 }
 
 // Helper for menuElem and selectElem.
-function baseElem(createFn: MenuClassCons, triggerElem: Element, createFunc: MenuCreateFunc,
-                  options: IMenuOptions = {}) {
+export function baseElem(createFn: MenuClassCons, triggerElem: Element, createFunc: MenuCreateFunc,
+                  options: ISelectOptions = {}) {
   // This is similar to defaultsDeep but avoids merging arrays, since options.trigger should have
   // the exact value from options if present.
   options = mergeWith({}, defaultMenuOptions, options,
@@ -124,7 +125,7 @@ const defaultMenuOptions: IMenuOptions = {
 /**
  * Implementation of the BaseMenu. Extended by Menu and Select.
  */
-class BaseMenu extends Disposable implements IPopupContent {
+export class BaseMenu extends Disposable implements IPopupContent {
   public readonly content: HTMLElement;
 
   private _selected: HTMLElement|null = null;
@@ -170,40 +171,19 @@ class BaseMenu extends Disposable implements IPopupContent {
   protected nextIndex(): void {
     const next = getNextSelectable(this._selected,
       (elem) => (elem && elem.nextElementSibling) || this.content.firstElementChild);
-    if (next) { this._setSelected(next); }
+    if (next) { this.setSelected(next); }
   }
 
   protected prevIndex(): void {
     const next = getNextSelectable(this._selected,
       (elem) => (elem && elem.previousElementSibling) || this.content.lastElementChild);
-    if (next) { this._setSelected(next); }
-  }
-
-  private _onMouseOver(ev: MouseEvent) {
-    const elem = this._findTargetItem(ev);
-    if (!isMenuContainer(elem)) {
-      this._setSelected(elem);     // If elem is null, intentionally deselect.
-    }
-  }
-
-  private _onMouseLeave(ev: MouseEvent) {
-    const elem = this._selected;
-    if (elem && !elem.classList.contains('weasel-popup-open')) {
-      // Don't deselect if there is an open submenu.
-      this._setSelected(null);
-    }
-  }
-
-  private _findTargetItem(ev: MouseEvent): HTMLElement|null {
-    // Find immediate child of this.content which is an ancestor of ev.target.
-    const elem = findAncestorChild(this.content, ev.target as Element);
-    return elem && isSelectable(elem) ? elem : null;
+    if (next) { this.setSelected(next); }
   }
 
   // When the selected element changes, update the classes of the formerly and newly-selected
   // elements and call any callbacks bound to selection stored on the elements.
   // Also focus the newly-selected element for keyboard events.
-  private _setSelected(elem: HTMLElement|null) {
+  protected setSelected(elem: HTMLElement|null) {
     const prev = this._selected;
     if (elem === prev) { return; }
     if (prev) {
@@ -220,6 +200,27 @@ class BaseMenu extends Disposable implements IPopupContent {
     // Focus the item if available, or the parent menu container otherwise.
     (elem || this.content).focus();
   }
+
+  private _onMouseOver(ev: MouseEvent) {
+    const elem = this._findTargetItem(ev);
+    if (!isMenuContainer(elem)) {
+      this.setSelected(elem);     // If elem is null, intentionally deselect.
+    }
+  }
+
+  private _onMouseLeave(ev: MouseEvent) {
+    const elem = this._selected;
+    if (elem && !elem.classList.contains('weasel-popup-open')) {
+      // Don't deselect if there is an open submenu.
+      this.setSelected(null);
+    }
+  }
+
+  private _findTargetItem(ev: MouseEvent): HTMLElement|null {
+    // Find immediate child of this.content which is an ancestor of ev.target.
+    const elem = findAncestorChild(this.content, ev.target as Element);
+    return elem && isSelectable(elem) ? elem : null;
+  }
 }
 
 /**
@@ -235,9 +236,9 @@ export class Menu extends BaseMenu implements IPopupContent {
 }
 
 /**
- * Implementation of the Select. See select() documentation for usage.
+ * Implementation of the InputSelect. See inputSelect() documentation for usage.
  */
-export class Select extends BaseMenu implements IPopupContent {
+export class InputSelect extends BaseMenu implements IPopupContent {
   constructor(ctl: IOpenController, items: DomElementArg[], options: IMenuOptions = {}) {
     super(ctl, items, options);
 
