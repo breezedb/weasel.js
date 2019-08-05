@@ -78,12 +78,12 @@ export function select<T>(
         ArrowUp: () => ctl.open()
       })
     }],
-    selectLabelOnOpen: () => selected.get().label
+    selectLabelOnOpen: () => selected.get().label,
+    stretchToContainer: selectBtn
   };
 
   // DOM content of the open select menu.
   const selectContent = () => [
-    (elem: HTMLElement) => stretchMenuToContainer(elem, selectBtn),
     dom.forEach(callback(), (option) => {
       const obj: IOptionFull<T> = getOptionFull(option);
       // Note we only set 'selected' when an <option> is created; we are not subscribing to obs.
@@ -187,12 +187,6 @@ class SelectKeyState<T> {
     }
     return null;
   }
-}
-
-export function stretchMenuToContainer(menuElem: HTMLElement, containerElem: Element): void {
-  const style = menuElem.style;
-  style.minWidth = containerElem.getBoundingClientRect().width + 'px';
-  style.marginLeft = style.marginRight = '0';
 }
 
 export function getOptionFull<T>(option: IOption<T>): IOptionFull<T> {

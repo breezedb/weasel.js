@@ -33,6 +33,9 @@ export interface IMenuOptions extends IPopupOptions {
   // trigger element (in addition to setting it on the trigger element itself). Useful to keep an
   // element highlighted while an associated menu is open.
   parentSelectorToMark?: string;
+
+  // If given, sets the width of the opened menu to equal the given container element.
+  stretchToContainer?: Element;
 }
 
 export interface ISubMenuOptions {
@@ -132,6 +135,7 @@ export class BaseMenu extends Disposable implements IPopupContent {
 
   constructor(private ctl: IOpenController, items: DomElementArg[], options: IMenuOptions = {}) {
     super();
+    const stretchContainer = options.stretchToContainer;
 
     // Set `weasel-popup-open` class on the ancestor of trigger that matches parentSelectorToMark.
     if (options && options.parentSelectorToMark) {
@@ -143,6 +147,7 @@ export class BaseMenu extends Disposable implements IPopupContent {
 
     this.content = cssMenu({class: options.menuCssClass || ''},
       items,
+      stretchContainer ? (elem) => stretchMenuToContainer(elem, stretchContainer) : null,
       dom.on('mouseover', (ev) => this._onMouseOver(ev)),
       dom.on('mouseleave', (ev) => this._onMouseLeave(ev)),
       dom.on('click', (ev) => this._findTargetItem(ev) ? ctl.close(0) : ev.stopPropagation()),
@@ -288,6 +293,16 @@ function findAncestorChild(ancestor: Element, elem: Element|null): Element|null 
     elem = elem.parentElement;
   }
   return elem;
+}
+
+/**
+ * Sets the width of the given menu element to match the given container element. Used by
+ * IMenuOptions setting 'stretchToContainer'.
+ */
+function stretchMenuToContainer(menuElem: HTMLElement, containerElem: Element): void {
+  const style = menuElem.style;
+  style.minWidth = containerElem.getBoundingClientRect().width + 'px';
+  style.marginLeft = style.marginRight = '0';
 }
 
 /**
