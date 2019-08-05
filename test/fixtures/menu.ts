@@ -132,13 +132,13 @@ function makeSelect() {
   const fruit = observable("avocado");
   const fruits = ["apple", "apricot", "avocado", "banana", "kiwi", "mango"];
   return dom('div', { style: `width: 200px;` },
-    select(fruit, () => fruits, {})
+    select(fruit, () => fruits)
   );
 }
 
 function makeComplexSelect() {
   console.log("makeComplexSelect");
-  const employee = observable(17);
+  const employee = observable(0);
   const employeesCB = () => [
     {value: 12, label: "Bob", disabled: true},
     {value: 17, label: "Alice"},
@@ -147,7 +147,7 @@ function makeComplexSelect() {
     {value: 19, label: "James"}
   ];
   return select(employee, employeesCB, {
-    defaultLabel: "Select employee:",
+    defaultLabel: "Employee:",
     menuCssClass: cssSelectMenu.className,
     buttonCssClass: cssSelectBtn.className,
     buttonArrow: dom('div', {style: `position: absolute; right: 10px`}, 'v')

@@ -1,11 +1,13 @@
 import {Computed, dom, DomArg, DomElementArg, onElem, Observable, styled} from 'grainjs';
-import {BaseMenu, baseElem, IMenuOptions, menuItem} from './menu';
-import {IOpenController, PopupControl} from './popup';
+import {BaseMenu, defaultMenuOptions, IMenuOptions, menuItem} from './menu';
+import {IOpenController, PopupControl, setPopupToFunc} from './popup';
 
 export interface IOptionFull<T> {
   value: T;
   label: string;
   disabled?: boolean;
+  // Note that additional properties may be used for storing per-row info such as icon names.
+  // The additional property is accessible in each row's renderOption callback.
   [addl: string]: any;
 };
 
@@ -15,12 +17,13 @@ export type IOption<T> = (T & string) | IOptionFull<T>;
 export interface ISelectUserOptions {
   defaultLabel?: string,   // Button label displayed when no value is selected.
   buttonArrow?: DomArg,    // DOM for what is typically the chevron on the select button.
-  menuCssClass?: string,
-  buttonCssClass?: string
+  menuCssClass?: string,   // If provided, applies the css class to the menu container.
+  buttonCssClass?: string  // If provided, applies the css class to the select button.
 }
 
 export interface ISelectOptions extends IMenuOptions {
-  selectLabelOnOpen?: () => string;  // Selects the items with the given label on open.
+  // Selects the items with the given label on open - intended for internal use.
+  selectLabelOnOpen?: () => string;
 };
 
 /**
@@ -50,43 +53,54 @@ export function select<T>(
   // Computed contains the IOptionFull of the obs value.
   const selected = Computed.create(null, obs, (use, val) => {
     const option = callback().find(_op => val === getOptionFull(_op).value);
-    return option ? getOptionFull(option) : ({value: null, label: ''} as IOptionFull<null>);
+    return option ? getOptionFull(option) : ({value: null, label: options.defaultLabel || ""} as IOptionFull<null>);
   });
 
-  const container: Element = cssSelectBtn({tabIndex: '0', class: options.buttonCssClass || ''},
+  // Select button and associated event/disposal DOM.
+  const selectBtn: Element = cssSelectBtn({tabIndex: '0', class: options.buttonCssClass || ''},
     dom.autoDispose(selected),
-    dom.domComputed(selected, sel =>
-      renderOption(sel.label ? sel : {value: null, label: options.defaultLabel || ""})),
+    dom.domComputed(selected, sel => renderOption(sel)),
     options.buttonArrow,
     dom.on('keydown', (ev) => {
       const sel = keyState.add(ev.key);
       if (sel) { obs.set(sel.value); }
-    }),
-    (elem) => baseElem((...args) => Select.create(...args), elem, () => [
-      (elem) => stretchMenuToContainer(elem, container),
-      dom.forEach(callback(), (option) => {
-        const obj: IOptionFull<T> = getOptionFull(option);
-        // Note we only set 'selected' when an <option> is created; we are not subscribing to obs.
-        // This is to reduce the amount of subscriptions, esp. when number of options is large.
-        return menuItem(() => { obs.set(obj.value); },
-          Object.assign({ disabled: obj.disabled, selected: obj.value === obs.get() },
-            obj.disabled ? { class: 'disabled'} : {}),
-          renderOption(obj)
-        );
-      }),
-    ], {
-      menuCssClass: options.menuCssClass,
-      trigger: [(triggerElem: Element, ctl: PopupControl) => {
-        dom.onElem(triggerElem, 'click', () => ctl.toggle()),
-        dom.onKeyElem(triggerElem as HTMLElement, 'keydown', {
-          ArrowDown: () => ctl.open(),
-          ArrowUp: () => ctl.open()
-        })
-      }],
-      selectLabelOnOpen: () => selected.get().label
     })
   );
-  return container;
+
+  // Options to pass into the Select class.
+  const selectOptions: ISelectOptions = {
+    ...defaultMenuOptions,
+    menuCssClass: options.menuCssClass,
+    trigger: [(triggerElem: Element, ctl: PopupControl) => {
+      dom.onElem(triggerElem, 'click', () => ctl.toggle()),
+      dom.onKeyElem(triggerElem as HTMLElement, 'keydown', {
+        ArrowDown: () => ctl.open(),
+        ArrowUp: () => ctl.open()
+      })
+    }],
+    selectLabelOnOpen: () => selected.get().label
+  };
+
+  // DOM content of the open select menu.
+  const selectContent = [
+    (elem: HTMLElement) => stretchMenuToContainer(elem, selectBtn),
+    dom.forEach(callback(), (option) => {
+      const obj: IOptionFull<T> = getOptionFull(option);
+      // Note we only set 'selected' when an <option> is created; we are not subscribing to obs.
+      // This is to reduce the amount of subscriptions, esp. when number of options is large.
+      return menuItem(() => { obs.set(obj.value); },
+        Object.assign({disabled: obj.disabled, selected: obj.value === obs.get()},
+          obj.disabled ? {class: 'disabled'} : {}),
+        renderOption(obj)
+      );
+    })
+  ];
+
+  setPopupToFunc(selectBtn,
+    (ctl) => Select.create(null, ctl, selectContent, selectOptions),
+    selectOptions);
+
+  return selectBtn;
 }
 
 /**
@@ -96,13 +110,17 @@ export function select<T>(
  */
 class Select<T> extends BaseMenu {
   private _selectRows: HTMLElement[] = Array.from(this.content.children) as HTMLElement[];
-  private _keyState: SelectKeyState<string> = new SelectKeyState(() =>
-    this._selectRows.map(_elem => ({
-      label: _elem.textContent || "",
-      value: _elem.textContent || "",
-      disabled: _elem.classList.contains('disabled')
-    }))
-  );
+
+  // Create array of options on build to prevent rebuilding on each keystroke.
+  private _selectOptions: IOption<string>[] = this._selectRows.map(_elem => ({
+    label: _elem.textContent || "",
+    value: _elem.textContent || "",
+    disabled: _elem.classList.contains('disabled')
+  }));
+
+  // The class Select handles key input separately from the function select() since the selected
+  // option is not maintained in the class, so the search callback is called on each keystroke.
+  private _keyState: SelectKeyState<string> = new SelectKeyState(() => this._selectOptions);
 
   constructor(ctl: IOpenController, items: DomElementArg[], options: ISelectOptions = {}) {
     super(ctl, items, options);
@@ -114,13 +132,14 @@ class Select<T> extends BaseMenu {
     });
 
     // If an initial value is given, use it, otherwise select the first element.
-    const init = options.selectLabelOnOpen ? options.selectLabelOnOpen() : null;
-    setTimeout(() => (init ? this._selectRow(init) : this.nextIndex()), 0);
+    const init = options.selectLabelOnOpen ? options.selectLabelOnOpen() : "";
+    setTimeout(() => this._selectRow(init, true), 0);
   }
 
-  private _selectRow(label: string): void {
+  // If defaultToNext is set, the next index is selected when no element is found.
+  private _selectRow(label: string, defaultToNext: boolean = false): void {
     const elem = this._selectRows.find(_elem => _elem.textContent === label);
-    return this.setSelected(elem || null);
+    return (elem || !defaultToNext) ? this.setSelected(elem || null) : this.nextIndex();
   }
 }
 
@@ -133,6 +152,7 @@ class SelectKeyState<T> {
   private _cycleIndex: number = 0;
   private _timeoutId: NodeJS.Timeout|null = null;
 
+  // Requires _itemCallback, a function that returns all IOptions in the select.
   constructor(private _itemCallback: () => IOption<T>[]) {}
 
   // Adds a character to the search term. Returns the latest first match of the items, or null
@@ -159,7 +179,7 @@ class SelectKeyState<T> {
     }
     const matches = this._itemCallback().filter(_item => {
       _item = getOptionFull(_item);
-      return !_item.disabled && _item.label.toLowerCase().slice(0, this._term.length) === this._term;
+      return !_item.disabled && _item.label.toLowerCase().startsWith(this._term);
     });
     if (matches.length > 0) {
       this._cycleIndex %= matches.length;

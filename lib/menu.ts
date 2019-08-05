@@ -70,7 +70,7 @@ export function inputSelectElem(triggerElem: Element, createFunc: MenuCreateFunc
 }
 
 // Helper for menuElem and selectElem.
-export function baseElem(createFn: MenuClassCons, triggerElem: Element, createFunc: MenuCreateFunc,
+function baseElem(createFn: MenuClassCons, triggerElem: Element, createFunc: MenuCreateFunc,
                   options: ISelectOptions = {}) {
   // This is similar to defaultsDeep but avoids merging arrays, since options.trigger should have
   // the exact value from options if present.
@@ -108,7 +108,7 @@ export function menuItemLink(...args: DomElementArg[]): Element {
   );
 }
 
-const defaultMenuOptions: IMenuOptions = {
+export const defaultMenuOptions: IMenuOptions = {
   attach: 'body',
   boundaries: 'viewport',
   placement: 'bottom-start',
