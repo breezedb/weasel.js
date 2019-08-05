@@ -82,7 +82,7 @@ export function select<T>(
   };
 
   // DOM content of the open select menu.
-  const selectContent = [
+  const selectContent = () => [
     (elem: HTMLElement) => stretchMenuToContainer(elem, selectBtn),
     dom.forEach(callback(), (option) => {
       const obj: IOptionFull<T> = getOptionFull(option);
@@ -97,7 +97,7 @@ export function select<T>(
   ];
 
   setPopupToFunc(selectBtn,
-    (ctl) => Select.create(null, ctl, selectContent, selectOptions),
+    (ctl) => Select.create(null, ctl, selectContent(), selectOptions),
     selectOptions);
 
   return selectBtn;
@@ -189,13 +189,13 @@ class SelectKeyState<T> {
   }
 }
 
-function stretchMenuToContainer(menuElem: HTMLElement, containerElem: Element): void {
+export function stretchMenuToContainer(menuElem: HTMLElement, containerElem: Element): void {
   const style = menuElem.style;
   style.minWidth = containerElem.getBoundingClientRect().width + 'px';
   style.marginLeft = style.marginRight = '0';
 }
 
-function getOptionFull<T>(option: IOption<T>): IOptionFull<T> {
+export function getOptionFull<T>(option: IOption<T>): IOptionFull<T> {
   return (typeof option === "string") ? {value: option, label: option} : (option as IOptionFull<T>);
 }
 
@@ -210,10 +210,14 @@ const cssSelectBtn = styled('div', `
   border: 1px solid grey;
   border-radius: 3px;
   cursor: pointer;
-  outline: none;
+  display: flex;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   -webkit-appearance: none;
   -moz-appearance: none;
-  display: flex;
+  user-select: none;
+  -moz-user-select: none;
 
   &:focus {
     outline: 5px auto #5E9ED6;

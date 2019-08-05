@@ -5,7 +5,7 @@
 import {dom, DomElementArg, input, makeTestId, obsArray, observable, styled, TestId} from 'grainjs';
 import {cssMenuDivider, menu, menuItem, menuItemLink, menuItemSubmenu} from '../../index';
 import {IOpenController, PopupControl} from '../../index';
-import {inputSelect, select} from '../../index';
+import {inputMenu, select} from '../../index';
 
 const testId: TestId = makeTestId('test-');
 const lastAction = observable("");
@@ -44,7 +44,7 @@ function setupTest() {
     makeComplexSelect(),
     cssInputContainer(
       cssInput(inputObs, {onInput: true}, {placeholder: 'My Input Menu'},
-        inputSelect(makeInputMenu, {trigger: [inputTrigger], attach: null, menuCssClass: cssInputMenu.className}),
+        inputMenu(makeInputMenu, {trigger: [inputTrigger], attach: null, menuCssClass: cssInputMenu.className}),
         dom.onKeyPress({Enter: submitInput}),
         testId('input1')
       )

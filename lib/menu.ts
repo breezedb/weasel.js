@@ -54,19 +54,19 @@ export function menuElem(triggerElem: Element, createFunc: MenuCreateFunc, optio
 }
 
 /**
- * Attaches an inputSelect menu to its trigger element, for example:
+ * Attaches an inputMenu to its trigger element, for example:
  *    dom('input', select((ctl) => [
  *      menuItem(...),
  *      menuItem(...),
  *    ]))
- * The inputSelect menu differs from a normal menu in that focus is maintained on the triggerElem
- * when the menu is open. This makes it ideal for input trigger elements and select widgets.
+ * The inputMenu menu differs from a normal menu in that focus is maintained on the triggerElem
+ * when the menu is open. This makes it ideal for input trigger elements.
  */
-export function inputSelect(createFunc: MenuCreateFunc, options?: IMenuOptions): DomElementMethod {
-  return (elem) => inputSelectElem(elem, createFunc, options);
+export function inputMenu(createFunc: MenuCreateFunc, options?: IMenuOptions): DomElementMethod {
+  return (elem) => inputMenuElem(elem, createFunc, options);
 }
-export function inputSelectElem(triggerElem: Element, createFunc: MenuCreateFunc, options: IMenuOptions = {}) {
-  return baseElem((...args) => InputSelect.create(...args), triggerElem, createFunc, options);
+export function inputMenuElem(triggerElem: Element, createFunc: MenuCreateFunc, options: IMenuOptions = {}) {
+  return baseElem((...args) => InputMenu.create(...args), triggerElem, createFunc, options);
 }
 
 // Helper for menuElem and selectElem.
@@ -236,9 +236,9 @@ export class Menu extends BaseMenu implements IPopupContent {
 }
 
 /**
- * Implementation of the InputSelect. See inputSelect() documentation for usage.
+ * Implementation of the InputMenu. See inputMenu() documentation for usage.
  */
-export class InputSelect extends BaseMenu implements IPopupContent {
+export class InputMenu extends BaseMenu implements IPopupContent {
   constructor(ctl: IOpenController, items: DomElementArg[], options: IMenuOptions = {}) {
     super(ctl, items, options);
 
