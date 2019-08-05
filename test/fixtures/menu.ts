@@ -5,7 +5,7 @@
 import {dom, DomElementArg, input, makeTestId, obsArray, observable, styled, TestId} from 'grainjs';
 import {cssMenuDivider, menu, menuItem, menuItemLink, menuItemSubmenu} from '../../index';
 import {IOpenController, PopupControl} from '../../index';
-import {select} from '../../index';
+import {inputMenu, select} from '../../index';
 
 const testId: TestId = makeTestId('test-');
 const lastAction = observable("");
@@ -40,9 +40,11 @@ function setupTest() {
       })
     ),
     cssButton('My Funky Menu', menu(makeFunkyMenu, funkyOptions)),
+    makeSelect(),
+    makeComplexSelect(),
     cssInputContainer(
       cssInput(inputObs, {onInput: true}, {placeholder: 'My Input Menu'},
-        select(makeInputMenu, {trigger: [inputTrigger], attach: null, menuCssClass: cssInputMenu.className}),
+        inputMenu(makeInputMenu, {trigger: [inputTrigger], attach: null, menuCssClass: cssInputMenu.className}),
         dom.onKeyPress({Enter: submitInput}),
         testId('input1')
       )
@@ -125,6 +127,33 @@ function makeFunkySubmenu(): DomElementArg[] {
   ];
 }
 
+function makeSelect() {
+  console.log("makeSelect");
+  const fruit = observable("avocado");
+  const fruits = ["apple", "apricot", "avocado", "banana", "kiwi", "mango"];
+  return dom('div', { style: `width: 200px;` },
+    select(fruit, () => fruits)
+  );
+}
+
+function makeComplexSelect() {
+  console.log("makeComplexSelect");
+  const employee = observable(0);
+  const employeesCB = () => [
+    {value: 12, label: "Bob", disabled: true},
+    {value: 17, label: "Alice"},
+    {value: 13, label: "Amy"},
+    {value: 21, label: "Eve"},
+    {value: 19, label: "James"}
+  ];
+  return select(employee, employeesCB, {
+    defaultLabel: "Employee:",
+    menuCssClass: cssSelectMenu.className,
+    buttonCssClass: cssSelectBtn.className,
+    buttonArrow: dom('div', {style: `position: absolute; right: 10px`}, 'v')
+  });
+}
+
 function makeInputMenu(): DomElementArg[] {
   console.log("makeInputMenu");
   return [
@@ -146,7 +175,7 @@ const cssExample = styled('div', `
   font-size: 100%;
   font-family: sans-serif;
   vertical-align: baseline;
-  height: 300px;
+  height: 400px;
   width: 500px;
   padding: 16px;
 
@@ -190,6 +219,25 @@ const cssFunkyMenu = styled('div', `
   --weaseljs-selected-background-color: white;
   --weaseljs-selected-color: black;
   --weaseljs-menu-item-padding: 20px;
+`);
+
+const cssSelectBtn = styled('div', `
+  width: 100px;
+  height: 20px;
+  line-height: 20px;
+  margin: 16px 0;
+`);
+
+const cssSelectMenu = styled('div', `
+  line-height: initial;
+  padding: 16px 0px;
+  box-shadow: 0 2px 20px 0 rgba(38,38,51,0.2);
+  min-width: 160px;
+  max-height: 400px;
+  z-index: 999;
+  overflow-y: scroll;
+  max-height: 95vh;
+  --weaseljs-menu-item-padding: 8px 16px;
 `);
 
 const cssInputContainer = styled('div', `
