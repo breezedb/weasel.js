@@ -79,7 +79,7 @@ export function select<T>(
       })
     }],
     selectLabelOnOpen: () => selected.get().label,
-    stretchToContainer: selectBtn
+    stretchToSelector: `.${selectBtn.className.replace(' ', '.')}`
   };
 
   // DOM content of the open select menu.
