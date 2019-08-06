@@ -299,7 +299,7 @@ function findAncestorChild(ancestor: Element, elem: Element|null): Element|null 
 
 /**
  * Sets the width of the given menu element to match the given container element. Used by
- * IMenuOptions setting 'stretchToContainer'.
+ * IMenuOptions setting 'stretchToSelector'.
  */
 function stretchMenuToContainer(menuElem: HTMLElement, containerElem: Element): void {
   const style = menuElem.style;
