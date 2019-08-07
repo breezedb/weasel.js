@@ -10,6 +10,7 @@ import {inputMenu, select} from '../../index';
 const testId: TestId = makeTestId('test-');
 const lastAction = observable("");
 const inputObs = observable("");
+const disableSelect = observable(false);
 let resetBtn: HTMLElement;
 
 function setupTest() {
@@ -114,6 +115,7 @@ function makeFunkyMenu(): DomElementArg[] {
     menuItem(() => { console.log("Menu item: Copy"); }, "Copy"),
     cssMenuDivider(),
     menuItem(() => { console.log("Menu item: Paste"); }, "Paste"),
+    menuItem(() => { disableSelect.set(!disableSelect.get()); }, "Toggle select disabled")
   ];
 }
 
@@ -150,7 +152,8 @@ function makeComplexSelect() {
     defaultLabel: "Employee:",
     menuCssClass: cssSelectMenu.className,
     buttonCssClass: cssSelectBtn.className,
-    buttonArrow: dom('div', {style: `position: absolute; right: 10px`}, 'v')
+    buttonArrow: dom('div', {style: `position: absolute; right: 10px`}, 'v'),
+    disabled: disableSelect
   });
 }
 
