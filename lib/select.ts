@@ -1,4 +1,4 @@
-import {Computed, dom, DomArg, DomElementArg, onElem, Observable, styled} from 'grainjs';
+import {BindableValue, Computed, dom, DomArg, DomElementArg, onElem, Observable, styled} from 'grainjs';
 import {BaseMenu, defaultMenuOptions, IMenuOptions, menuItem} from './menu';
 import {IOpenController, PopupControl, setPopupToFunc} from './popup';
 
@@ -19,12 +19,14 @@ export interface ISelectUserOptions {
   buttonArrow?: DomArg,    // DOM for what is typically the chevron on the select button.
   menuCssClass?: string,   // If provided, applies the css class to the menu container.
   buttonCssClass?: string  // If provided, applies the css class to the select button.
+  // If disabled, adds the .disabled class to the select button and prevents opening.
+  disabled?: BindableValue<boolean>;
 }
 
 export interface ISelectOptions extends IMenuOptions {
   // Selects the items with the given label on open - intended for internal use.
   selectLabelOnOpen?: () => string;
-};
+}
 
 /**
  * User interface for creating a weasel select element in DOM.
@@ -59,23 +61,26 @@ export function select<T>(
   // Select button and associated event/disposal DOM.
   const selectBtn: Element = cssSelectBtn({tabIndex: '0', class: options.buttonCssClass || ''},
     dom.autoDispose(selected),
+    options.disabled ? dom.cls('disabled', options.disabled) : null,
     dom.domComputed(selected, sel => renderOption(sel)),
     options.buttonArrow,
     dom.on('keydown', (ev) => {
+      if (isDisabled()) { return; }
       const sel = keyState.add(ev.key);
       if (sel) { obs.set(sel.value); }
     })
   );
 
   // Options to pass into the Select class.
+  const isDisabled = () => selectBtn.classList.contains('disabled');
   const selectOptions: ISelectOptions = {
     ...defaultMenuOptions,
     menuCssClass: options.menuCssClass,
     trigger: [(triggerElem: Element, ctl: PopupControl) => {
-      dom.onElem(triggerElem, 'click', () => ctl.toggle()),
+      dom.onElem(triggerElem, 'click', () => isDisabled() || ctl.toggle()),
       dom.onKeyElem(triggerElem as HTMLElement, 'keydown', {
-        ArrowDown: () => ctl.open(),
-        ArrowUp: () => ctl.open()
+        ArrowDown: () => isDisabled() || ctl.open(),
+        ArrowUp: () => isDisabled() || ctl.open()
       })
     }],
     selectLabelOnOpen: () => selected.get().label,
@@ -215,5 +220,10 @@ const cssSelectBtn = styled('div', `
 
   &:focus {
     outline: 5px auto #5E9ED6;
+  }
+
+  &.disabled {
+    color: grey;
+    cursor: pointer;
   }
 `);
