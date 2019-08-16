@@ -184,7 +184,7 @@ class SelectKeyState<T> {
       this._term += char;
       this._cycleIndex = 0;
     }
-    const items = Array.isArray(this._itemArray) ? this._itemArray : this._itemArray.get()
+    const items = Array.isArray(this._itemArray) ? this._itemArray : this._itemArray.get();
     const matches = items.filter(_item => {
       _item = getOptionFull(_item);
       return !_item.disabled && _item.label.toLowerCase().startsWith(this._term);
