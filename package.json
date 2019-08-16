@@ -6,8 +6,8 @@
   "types": "dist/index",
   "scripts": {
     "build": "tsc",
-    "test": "mocha 'test/browser/**/*.{js,ts}'",
-    "test-debug": "mocha --bail test/browser/**/*.{js,ts} --no-exit",
+    "test": "MOCHA_WEBDRIVER_STACKTRACES=1 mocha 'test/browser/**/*.{js,ts}'",
+    "test-debug": "MOCHA_WEBDRIVER_STACKTRACES=1 mocha --bail test/browser/**/*.{js,ts} --no-exit",
     "test-manual": "webpack-dev-server --config test/fixtures/webpack.config.js",
     "prepack": "npm run build && npm test"
   },
@@ -27,8 +27,8 @@
   },
   "homepage": "https://github.com/gristlabs/weasel.js#readme",
   "dependencies": {
-    "grainjs": "^1.0.0",
-    "lodash": "^4.17.11",
+    "grainjs": "^1.0.1",
+    "lodash": "^4.17.15",
     "popper.js": "1.15.0"
   },
   "devDependencies": {
