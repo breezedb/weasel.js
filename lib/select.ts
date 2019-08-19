@@ -1,4 +1,5 @@
-import {BindableValue, Computed, dom, DomArg, DomElementArg, onElem, Observable, styled} from 'grainjs';
+import {dom, DomArg, DomElementArg, onElem, styled} from 'grainjs';
+import {BindableValue, Computed, MaybeObsArray, Observable} from 'grainjs';
 import {BaseMenu, defaultMenuOptions, IMenuOptions, menuItem} from './menu';
 import {IOpenController, PopupControl, setPopupToFunc} from './popup';
 
@@ -42,19 +43,24 @@ export interface ISelectOptions extends IMenuOptions {
  *      {value: 21, label: "Eve"},
  *    ];
  *    select(employee, employeesCB, {defaultLabel: "Select employee:"});
+ *
+ * NOTE that a MaybeObsArray is accepted for the select options. We do not accept a callback to be
+ * called when the dropdown menu is opened, since the active options also determine what is
+ * displayed as the selected value on the button when the dropdown menu is closed.
  */
 export function select<T>(
   obs: Observable<T>,
-  callback: () => Array<IOption<T>>,
+  optionArray: MaybeObsArray<IOption<T>>,
   options: ISelectUserOptions = {},
   renderOption: (option: IOptionFull<T|null>) => DomArg = (option) => option.label
 ): Element {
   // Create SelectKeyState to manage user value search inputs.
-  const keyState = new SelectKeyState<T>(callback);
+  const keyState = new SelectKeyState<T>(optionArray);
 
   // Computed contains the IOptionFull of the obs value.
   const selected = Computed.create(null, obs, (use, val) => {
-    const option = callback().find(_op => val === getOptionFull(_op).value);
+    const array = Array.isArray(optionArray) ? optionArray : use(optionArray);
+    const option = array.find(_op => val === getOptionFull(_op).value);
     return option ? getOptionFull(option) : ({value: null, label: options.defaultLabel || ""} as IOptionFull<null>);
   });
 
@@ -89,7 +95,7 @@ export function select<T>(
 
   // DOM content of the open select menu.
   const selectContent = () => [
-    dom.forEach(callback(), (option) => {
+    dom.forEach(optionArray, (option) => {
       const obj: IOptionFull<T> = getOptionFull(option);
       // Note we only set 'selected' when an <option> is created; we are not subscribing to obs.
       // This is to reduce the amount of subscriptions, esp. when number of options is large.
@@ -114,10 +120,10 @@ export function select<T>(
  * Should always be created using select(), which adds the select button and associated logic.
  */
 class Select<T> extends BaseMenu {
-  private _selectRows: HTMLElement[] = Array.from(this.content.children) as HTMLElement[];
+  private readonly _selectRows: HTMLElement[] = Array.from(this.content.children) as HTMLElement[];
 
   // Create array of options on build to prevent rebuilding on each keystroke.
-  private _selectOptions: IOption<string>[] = this._selectRows.map(_elem => ({
+  private readonly _selectOptions: IOption<string>[] = this._selectRows.map(_elem => ({
     label: _elem.textContent || "",
     value: _elem.textContent || "",
     disabled: _elem.classList.contains('disabled')
@@ -125,7 +131,7 @@ class Select<T> extends BaseMenu {
 
   // The class Select handles key input separately from the function select() since the selected
   // option is not maintained in the class, so the search callback is called on each keystroke.
-  private _keyState: SelectKeyState<string> = new SelectKeyState(() => this._selectOptions);
+  private readonly _keyState: SelectKeyState<string> = new SelectKeyState(this._selectOptions);
 
   constructor(ctl: IOpenController, items: DomElementArg[], options: ISelectOptions = {}) {
     super(ctl, items, options);
@@ -158,7 +164,7 @@ class SelectKeyState<T> {
   private _timeoutId: NodeJS.Timeout|null = null;
 
   // Requires _itemCallback, a function that returns all IOptions in the select.
-  constructor(private _itemCallback: () => IOption<T>[]) {}
+  constructor(private _itemArray: MaybeObsArray<IOption<T>>) {}
 
   // Adds a character to the search term. Returns the latest first match of the items, or null
   // if no items match.
@@ -182,7 +188,8 @@ class SelectKeyState<T> {
       this._term += char;
       this._cycleIndex = 0;
     }
-    const matches = this._itemCallback().filter(_item => {
+    const items = Array.isArray(this._itemArray) ? this._itemArray : this._itemArray.get();
+    const matches = items.filter(_item => {
       _item = getOptionFull(_item);
       return !_item.disabled && _item.label.toLowerCase().startsWith(this._term);
     });
@@ -219,7 +226,8 @@ const cssSelectBtn = styled('div', `
   -moz-user-select: none;
 
   &:focus {
-    outline: 5px auto #5E9ED6;
+    outline: none;
+    box-shadow: 0px 0px 2px 2px #5E9ED6;
   }
 
   &.disabled {

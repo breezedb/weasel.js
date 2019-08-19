@@ -13,6 +13,14 @@ const inputObs = observable("");
 const disableSelect = observable(false);
 let resetBtn: HTMLElement;
 
+const employees = observable([
+  {value: 12, label: "Bob", disabled: true},
+  {value: 17, label: "Alice"},
+  {value: 13, label: "Amy"},
+  {value: 21, label: "Eve"},
+  {value: 19, label: "James"}
+]);
+
 function setupTest() {
   function submitInput() {
     console.log("Enter key triggered on input");
@@ -118,7 +126,12 @@ function makeFunkyMenu(): DomElementArg[] {
     menuItem(() => { console.log("Menu item: Copy"); }, "Copy"),
     cssMenuDivider(),
     menuItem(() => { console.log("Menu item: Paste"); }, "Paste"),
-    menuItem(() => { disableSelect.set(!disableSelect.get()); }, "Toggle select disabled")
+    menuItem(() => { disableSelect.set(!disableSelect.get()); }, "Toggle select disabled"),
+    menuItem(() => {
+      if (employees.get().length > 0) {
+        employees.set(employees.get().slice(1));
+      }
+    }, "Remove employee")
   ];
 }
 
@@ -137,21 +150,14 @@ function makeSelect() {
   const fruit = observable("avocado");
   const fruits = ["apple", "apricot", "avocado", "banana", "kiwi", "mango"];
   return dom('div', { style: `width: 200px;` },
-    select(fruit, () => fruits)
+    select(fruit, fruits)
   );
 }
 
 function makeComplexSelect() {
   console.log("makeComplexSelect");
   const employee = observable(0);
-  const employeesCB = () => [
-    {value: 12, label: "Bob", disabled: true},
-    {value: 17, label: "Alice"},
-    {value: 13, label: "Amy"},
-    {value: 21, label: "Eve"},
-    {value: 19, label: "James"}
-  ];
-  return select(employee, employeesCB, {
+  return select(employee, employees, {
     defaultLabel: "Employee:",
     menuCssClass: cssSelectMenu.className,
     buttonCssClass: cssSelectBtn.className,
