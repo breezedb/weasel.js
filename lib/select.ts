@@ -43,6 +43,10 @@ export interface ISelectOptions extends IMenuOptions {
  *      {value: 21, label: "Eve"},
  *    ];
  *    select(employee, employeesCB, {defaultLabel: "Select employee:"});
+ *
+ * NOTE that a MaybeObsArray is accepted for the select options. We do not accept a callback to be
+ * called when the dropdown menu is opened, since the active options also determine what is
+ * displayed as the selected value on the button when the dropdown menu is closed.
  */
 export function select<T>(
   obs: Observable<T>,
