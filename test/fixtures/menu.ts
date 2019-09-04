@@ -18,7 +18,8 @@ const employees = observable([
   {value: 17, label: "Alice"},
   {value: 13, label: "Amy"},
   {value: 21, label: "Eve"},
-  {value: 19, label: "James"}
+  {value: 19, label: "James"},
+  {value: 18, label: "Wolfeschlegelsteinhausenbergerdorff"}
 ]);
 
 function setupTest() {
