@@ -310,7 +310,10 @@ class OpenPopupHelper extends Disposable {
   /**
    * Closes the popup. Uses a default delay if delayMs is omitted.
    */
-  public close(delayMs?: number) { this._ctl.close(delayMs); }
+  public close(delayMs?: number) {
+    // Check that the popup controller has not already been disposed.
+    if (this._ctl) { this._ctl.close(delayMs); }
+  }
 
   /**
    * Sets css class `cls` on elem while this popup is open, defaulting to "weasel-popup-open".
