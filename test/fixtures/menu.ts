@@ -162,7 +162,7 @@ function makeComplexSelect() {
     defaultLabel: "Employee:",
     menuCssClass: cssSelectMenu.className,
     buttonCssClass: cssSelectBtn.className,
-    buttonArrow: dom('div', {style: `position: absolute; right: 10px`}, 'v'),
+    buttonArrow: dom('div', {style: `margin: 0 5px;`}, 'v'),
     disabled: disableSelect
   });
 }

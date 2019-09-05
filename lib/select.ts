@@ -71,7 +71,9 @@ export function select<T>(
     cssBtnText(
       dom.domComputed(selected, sel => renderOption(sel))
     ),
-    options.buttonArrow,
+    dom('div', {style: 'flex: none;'},
+      options.buttonArrow
+    ),
     dom.on('keydown', (ev) => {
       if (isDisabled()) { return; }
       const sel = keyState.add(ev.key);
@@ -207,9 +209,8 @@ export function getOptionFull<T>(option: IOption<T>): IOptionFull<T> {
   return (typeof option === "string") ? {value: option, label: option} : (option as IOptionFull<T>);
 }
 
-// Prevents select button text overflow - assumes buttonArrow width is ~20% of button.
+// Prevents select button text overflow.
 const cssBtnText = styled('div', `
-  width: 80%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -217,6 +218,8 @@ const cssBtnText = styled('div', `
 
 const cssSelectBtn = styled('div', `
   position: relative;
+  display: flex;
+  justify-content: space-between;
   width: 100%;
   height: 30px;
   line-height: 30px;
@@ -226,7 +229,6 @@ const cssSelectBtn = styled('div', `
   border: 1px solid grey;
   border-radius: 3px;
   cursor: pointer;
-  display: flex;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
