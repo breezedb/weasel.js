@@ -124,7 +124,7 @@ export function select<T>(
  * Should always be created using select(), which adds the select button and associated logic.
  */
 class Select<T> extends BaseMenu {
-  private readonly _selectRows: HTMLElement[] = Array.from(this.content.children) as HTMLElement[];
+  private readonly _selectRows: HTMLElement[] = Array.from(this._menuContent.children) as HTMLElement[];
 
   // Create array of options on build to prevent rebuilding on each keystroke.
   private readonly _selectOptions: IOption<string>[] = this._selectRows.map(_elem => ({
@@ -141,7 +141,7 @@ class Select<T> extends BaseMenu {
     super(ctl, items, options);
 
     // On keydown, search for the first element with a matching label.
-    onElem(this.content, 'keydown', (ev) => {
+    onElem(this._menuContent, 'keydown', (ev) => {
       const sel = this._keyState.add(ev.key);
       if (sel) { this._selectRow(sel.label); }
     });

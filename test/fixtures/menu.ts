@@ -150,18 +150,20 @@ function makeSelect() {
   console.log("makeSelect");
   const fruit = observable("avocado");
   const fruits = ["apple", "apricot", "avocado", "banana", "kiwi", "mango"];
+  const btnElem = dom('div', testId('btn3'));
   return dom('div', { style: `width: 200px;` },
-    select(fruit, fruits)
+    select(fruit, fruits, { buttonCssClass: btnElem.className })
   );
 }
 
 function makeComplexSelect() {
   console.log("makeComplexSelect");
   const employee = observable(0);
+  const btnElem = cssSelectBtn(testId('btn4'));
   return select(employee, employees, {
     defaultLabel: "Employee:",
     menuCssClass: cssSelectMenu.className,
-    buttonCssClass: cssSelectBtn.className,
+    buttonCssClass: btnElem.className,
     buttonArrow: dom('div', {style: `margin: 0 5px;`}, 'v'),
     disabled: disableSelect
   });
