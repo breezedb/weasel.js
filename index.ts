@@ -1,3 +1,4 @@
+export * from './lib/autocomplete';
 export * from './lib/menu';
 export * from './lib/popup';
 export * from './lib/select';
