@@ -286,4 +286,39 @@ describe('menu', () => {
     await assertOpen('.test-input1-menu', false);
     assert.equal(await driver.find('.test-input1').getAttribute('value'), 'helloa');
   });
+
+  it('should have a functional autocomplete', async function() {
+    this.timeout(10000);
+
+    // Check that the autocomplete opens when the input is focused.
+    const input = await driver.find('.test-autocomplete1');
+    await input.click();
+    assert.equal(await driver.findContent('li', /Thomas/).isPresent(), true);
+    assert.equal(await driver.findContent('li[class*=-sel]', /Thomas/).isPresent(), false);
+
+    // Type 't' and check that Thomas is selected.
+    await input.sendKeys('t');
+    assert.equal(await driver.findContent('li[class*=-sel]', /Thomas/).isPresent(), true);
+
+    // Hit enter and check that the input is set to 'Thomas'.
+    await input.sendKeys(Key.ENTER);
+    assert.equal(await input.getAttribute('value'), 'Thomas');
+
+    // Reset input focus
+    await driver.find('.test-top').click();
+    input.click();
+    for (let i = 0; i < 6; i++) { await input.sendKeys(Key.BACK_SPACE); }
+
+    // Type 'mar' and check that Mark is selected.
+    await input.sendKeys('mar');
+    assert.equal(await driver.findContent('li[class*=-sel]', /Mark/).isPresent(), true);
+
+    // Type 'j' and check that Marjorey is selected.
+    await input.sendKeys('j');
+    assert.equal(await driver.findContent('li[class*=-sel]', /Marjorey/).isPresent(), true);
+
+    // Use down arrow 3x and check that June is selected.
+    for (let i = 0; i < 3; i++) { await input.sendKeys(Key.DOWN); }
+    assert.equal(await driver.findContent('li[class*=-sel]', /June/).isPresent(), true);
+  });
 });

@@ -5,7 +5,7 @@
 import {dom, DomElementArg, input, makeTestId, obsArray, observable, styled, TestId} from 'grainjs';
 import {cssMenuDivider, menu, menuItem, menuItemLink, menuItemSubmenu} from '../../index';
 import {IOpenController, PopupControl} from '../../index';
-import {inputMenu, select} from '../../index';
+import {autocomplete, inputMenu, select} from '../../index';
 
 const testId: TestId = makeTestId('test-');
 const lastAction = observable("");
@@ -61,6 +61,9 @@ function setupTest() {
         dom.onKeyPress({Enter: submitInput}),
         testId('input1')
       )
+    ),
+    cssInputContainer(
+      makeAutocomplete()
     ),
     dom('div', 'Last action: ',
       dom('span', dom.text(lastAction), testId('last'))
@@ -178,6 +181,16 @@ function makeInputMenu(): DomElementArg[] {
       testId('input1-menu-item')
     )
   ];
+}
+
+function makeAutocomplete(): HTMLInputElement {
+  console.log("makeAutocomplete");
+  const inputVal = observable('');
+  const employees = ['Thomas', 'June', 'Bethany', 'Mark', 'Marjorey', 'Zachary'];
+  const inputElem = input(inputVal, {onInput: true}, {style: 'width: 200px;'},
+    testId('autocomplete1')
+  );
+  return autocomplete(inputElem, employees);
 }
 
 const cssExample = styled('div', `

@@ -136,7 +136,11 @@ export class BaseMenu extends Disposable implements IPopupContent {
   // The UL element containing the actual menu items.
   protected _menuContent: HTMLElement;
 
-  private _selected: HTMLElement|null = null;
+  protected _selected: HTMLElement|null = null;
+
+  // Indicates whether menu rows should be given browser focus when selected.
+  // Modified by extending classes to prevent trigger element from losing focus.
+  private _focusOnSelected: boolean = true;
 
   constructor(private ctl: IOpenController, items: DomElementArg[], options: IMenuOptions = {}) {
     super();
@@ -214,7 +218,11 @@ export class BaseMenu extends Disposable implements IPopupContent {
     }
     this._selected = elem;
     // Focus the item if available, or the parent menu container otherwise.
-    (elem || this._menuContent).focus();
+    if (this._focusOnSelected) { (elem || this._menuContent).focus(); }
+  }
+
+  protected set focusOnSelected(bool: boolean) {
+    this._focusOnSelected = bool;
   }
 
   private _onMouseOver(ev: MouseEvent) {
