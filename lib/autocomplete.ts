@@ -22,7 +22,11 @@ export function autocomplete<T>(
     ...defaultMenuOptions,
     menuCssClass: options.menuCssClass,
     trigger: [(triggerElem: Element, ctl: PopupControl) => {
-      dom.onElem(triggerElem, 'click', () => ctl.open())
+      dom.onElem(triggerElem, 'focus', () => ctl.open());
+      dom.onKeyElem(triggerElem as HTMLElement, 'keydown', {
+        ArrowDown: () => ctl.open(),
+        ArrowUp: () => ctl.open()
+      });
     }],
     stretchToSelector: 'input'
   };
@@ -48,7 +52,7 @@ export function autocomplete<T>(
  *
  * Should always be created using autocomplete(), which accepts as an argument the input element.
  */
-export class Autocomplete extends BaseMenu implements IPopupContent {
+class Autocomplete extends BaseMenu implements IPopupContent {
   private readonly _rows: HTMLElement[] = Array.from(this._menuContent.children) as HTMLElement[];
 
   constructor(ctl: IOpenController, items: DomElementArg[], options: IMenuOptions = {}) {
