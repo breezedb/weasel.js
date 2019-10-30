@@ -63,7 +63,12 @@ function setupTest() {
       )
     ),
     cssInputContainer(
-      makeAutocomplete()
+      makeAutocomplete(),
+      dom('span', {style: 'font-size: 8pt'}, ' (Default behavior)')
+    ),
+    cssInputContainer(
+      makeComplexAutocomplete(),
+      dom('span', {style: 'font-size: 8pt'}, ' (Case-sensitive & custom select behavior)')
     ),
     dom('div', 'Last action: ',
       dom('span', dom.text(lastAction), testId('last'))
@@ -193,6 +198,25 @@ function makeAutocomplete(): HTMLInputElement {
   return autocomplete(inputElem, employees);
 }
 
+function makeComplexAutocomplete(): HTMLInputElement {
+  console.log("makeComplexAutocomplete");
+  const inputVal = observable('');
+  const employees = ['Thomas', 'June', 'Bethany', 'Mark', 'Marjorey', 'Zachary'];
+  const inputElem = input(inputVal, {onInput: true}, {style: 'width: 200px;'},
+    testId('autocomplete2')
+  );
+  return autocomplete(inputElem, [], {
+    // Make selection add Smith to the end
+    contentFunc: (ctl: IOpenController) => [
+      dom.forEach(employees, (opt) => menuItem(() => { inputElem.value = opt + ' Smith'; }, opt))
+    ],
+    // Make matching case-sensistive
+    findMatch: (content: HTMLElement[], val: string) => {
+      return content.find((el: any) => el.textContent.startsWith(val)) || null;
+    }
+  });
+}
+
 const cssExample = styled('div', `
   position: relative;
   overflow: auto;
@@ -271,6 +295,7 @@ const cssSelectMenu = styled('div', `
 const cssInputContainer = styled('div', `
   position: relative;
   width: 400px;
+  margin: 5px 0;
 `);
 
 const cssInput = styled(input, `
