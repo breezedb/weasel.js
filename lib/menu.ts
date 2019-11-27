@@ -6,9 +6,9 @@
  * entirely by a custom item. For an item to be a selectable menu item, it needs `tabindex=-1`
  * attribute set. If unset, or if the "disabled" class is set, the item will not be selectable.
  *
- * Further, if `dom.data('menuItemSelected', (yesNo: boolean, elem) => {})` is set, that callback
- * will be called whenever the item is selected and unselected. In addition, the selected item
- * gets a css class. A callback should be seldom needed, but it is use for nested menus.
+ * Further, if `dom.dataElem(elem, 'menuItemSelected', (yesNo: boolean, elem) => {})` is set, that
+ * callback will be called whenever the item is selected and unselected. In addition, the selected
+ * item gets a css class. A callback should be seldom needed, but it is use for nested menus.
  *
  * Clicks on items will normally propagate to the menu, where they get caught and close the menu.
  * If a click on an item should not close the menu, the item should stop the click's propagation.
@@ -37,6 +37,11 @@ export interface IMenuOptions extends IPopupOptions {
   // If given, sets the width of the opened menu to equal that of the matching ancestor of the
   // trigger element.
   stretchToSelector?: string;
+
+  // If set to true, users can move to nothing selected with arrow keys. Otherwise, pressing arrow
+  // down on the last item selects the first one, and pressing the arrow up on the first item
+  // selects the last one.
+  allowNothingSelected?: boolean;
 }
 
 export interface ISubMenuOptions {
@@ -142,6 +147,8 @@ export class BaseMenu extends Disposable implements IPopupContent {
   // Modified by extending classes to prevent trigger element from losing focus.
   private _focusOnSelected: boolean = true;
 
+  private _allowNothingSelected: boolean;
+
   constructor(private ctl: IOpenController, items: DomElementArg[], options: IMenuOptions = {}) {
     super();
     const stretchContainer: Element|null = options.stretchToSelector ?
@@ -154,6 +161,8 @@ export class BaseMenu extends Disposable implements IPopupContent {
         ctl.setOpenClass(parent);
       }
     }
+
+    this._allowNothingSelected = Boolean(options.allowNothingSelected);
 
     this.content = cssMenuWrap(
       this._menuContent = cssMenu({class: options.menuCssClass || ''},
@@ -189,15 +198,17 @@ export class BaseMenu extends Disposable implements IPopupContent {
   }
 
   protected nextIndex(): void {
-    const next = getNextSelectable(this._selected,
-      (elem) => (elem && elem.nextElementSibling) || this._menuContent.firstElementChild);
-    if (next) { this.setSelected(next); }
+    const next = this._getNextSelectable(
+      this._selected, (elem) => elem.nextElementSibling, this._menuContent.firstElementChild
+    );
+    this.setSelected(next);
   }
 
   protected prevIndex(): void {
-    const next = getNextSelectable(this._selected,
-      (elem) => (elem && elem.previousElementSibling) || this._menuContent.lastElementChild);
-    if (next) { this.setSelected(next); }
+    const next = this._getNextSelectable(
+      this._selected, (elem) => elem.previousElementSibling, this._menuContent.lastElementChild
+    );
+    this.setSelected(next);
   }
 
   // When the selected element changes, update the classes of the formerly and newly-selected
@@ -245,6 +256,27 @@ export class BaseMenu extends Disposable implements IPopupContent {
     const elem = findAncestorChild(this._menuContent, ev.target as Element);
     return elem && isSelectable(elem) ? elem : null;
   }
+
+  /**
+   * Given a starting Element, a function to retrieve the next Element and the element to start over
+   * after reaching the last sibling, returns the next selectable Element (based on
+   * isSelectable). Returns null if the function to retrieve the next Element returns null. Always
+   * returns startElem if returned by getNext function, to prevent an infinite loop.
+   */
+  private _getNextSelectable(startElem: Element|null,
+                             getNext: (elem: Element) => Element|null,
+                             firstElem: Element|null): HTMLElement|null {
+    let next = this._getNext(startElem, getNext, firstElem);
+    while (next && next !== startElem && !isSelectable(next)) { next = this._getNext(next, getNext, firstElem); }
+    return next as HTMLElement|null;
+  }
+
+  private _getNext(elem: Element|null,
+                   getNext: (elem: Element) => Element|null,
+                   firstElem: Element|null): Element|null {
+    if (!elem) { return firstElem; }
+    return getNext(elem) || (this._allowNothingSelected ? null : firstElem);
+  }
 }
 
 /**
@@ -280,18 +312,6 @@ export class InputMenu extends BaseMenu implements IPopupContent {
  */
 function isMenuContainer(elem: Element|null) {
   return elem && elem.classList.contains(cssMenu.className);
-}
-
-/**
- * Given a starting Element and a function to retrieve the next Element, returns the next selectable
- * Element (based on isSelectable). Returns null if the function to retrieve the next Element returns
- * null. Always returns startElem if returned by getNext function, to prevent an infinite loop.
- */
-function getNextSelectable(startElem: Element|null,
-                           getNext: (elem: Element|null) => Element|null): HTMLElement|null {
-  let next = getNext(startElem);
-  while (next && next !== startElem && !isSelectable(next)) { next = getNext(next); }
-  return next as HTMLElement|null;
 }
 
 /**

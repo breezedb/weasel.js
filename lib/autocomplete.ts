@@ -3,19 +3,20 @@ import {BaseMenu, defaultMenuOptions, IMenuOptions, menuItem} from './menu';
 import {IOpenController, IPopupContent, PopupControl, setPopupToFunc} from './popup';
 
 /**
- * IAutocomplete options adds two properties IMenuOptions to customize autocomplete behavior:
- *
- * contentFunc: Overrides the passed-in optionArray to allow creating menu rows
- *   with special behavior when selected.
- *
- * findMatch: Overrides default case-insensitive row select behavior.
+ * IAutocomplete options adds some properties to IMenuOptions to customize autocomplete behavior:
  */
 export interface IAutocompleteOptions extends IMenuOptions {
-  contentFunc?: (ctl: IOpenController) => DomElementArg[];
+
+  // Overrides default case-insensitive row select behavior.
   findMatch?: (content: HTMLElement[], value: string) => HTMLElement|null;
+
+  // A callback triggered when user clicks one of the choices.
+  onClick?: (choice: string) => void;
+
 }
 
 const defaultFindMatch = (content: HTMLElement[], val: string) => {
+  if (!val) { return null; } // Empty string match nothing
   val = val.toLowerCase();
   return content.find((el: any) => el.textContent.toLowerCase().startsWith(val)) || null;
 };
@@ -28,24 +29,11 @@ const defaultFindMatch = (content: HTMLElement[], val: string) => {
  *      const inputElem = input(...);
  *      autocomplete(inputElem, employees);
  */
-export function autocomplete<T>(
+export function autocomplete(
   inputElem: HTMLInputElement,
-  optionArray: MaybeObsArray<string>,
+  choices: MaybeObsArray<string>,
   options: IAutocompleteOptions = {}
 ): HTMLInputElement {
-  // Add default values for contentFunc and findMatch.
-  options = {
-    // Default contentFunc uses the optionArray and sets the input to the text option on select.
-    contentFunc: (ctl: IOpenController) => [
-      dom.forEach(optionArray, (opt) =>
-        menuItem(() => { inputElem.value = opt; }, opt,
-          // Prevent input from being blurred on menuItem click.
-          dom.on('mousedown', (ev) => { ev.preventDefault(); })
-        )
-      )
-    ],
-    ...options
-  };
 
   // Options to pass into the Autocomplete class.
   const menuOptions: IAutocompleteOptions = {
@@ -61,9 +49,17 @@ export function autocomplete<T>(
     ...options
   };
 
-  const contentFunc = options.contentFunc!;
+  const contentFunc = () => [
+    dom.forEach(choices, (opt) => (
+      menuItem(
+        () => { inputElem.value = opt; if (options.onClick) { options.onClick(opt); }},
+        opt,
+      )
+    ))
+  ];
+
   setPopupToFunc(inputElem,
-    (ctl) => Autocomplete.create(null, ctl, contentFunc(ctl), menuOptions),
+    (ctl) => Autocomplete.create(null, ctl, contentFunc(), menuOptions),
     menuOptions);
 
   return inputElem;
@@ -77,6 +73,7 @@ export function autocomplete<T>(
 class Autocomplete extends BaseMenu implements IPopupContent {
   private readonly _rows: HTMLElement[] = Array.from(this._menuContent.children) as HTMLElement[];
   private readonly _findMatch: (content: HTMLElement[], value: string) => HTMLElement|null;
+  private _lastAsTyped: string;
 
   constructor(ctl: IOpenController, items: DomElementArg[], options: IAutocompleteOptions) {
     super(ctl, items, options);
@@ -86,12 +83,24 @@ class Autocomplete extends BaseMenu implements IPopupContent {
 
     const trigger = ctl.getTriggerElem() as HTMLInputElement;
 
+    // Keeps track of the last value as typed by the user.
+    this._lastAsTyped = trigger.value;
+    this.autoDispose(dom.onElem(trigger, 'input', () => { this._lastAsTyped = trigger.value; }));
+
     // Add key handlers to the trigger element as well as the menu if it is an input.
     this.autoDispose(onKeyElem(trigger, 'keydown', {
-      ArrowDown: () => this.nextIndex(),
-      ArrowUp: () => this.prevIndex(),
-      Enter$: () => this._selected && this._selected.click(),
-      Escape: () => ctl.close(0)
+      ArrowDown: () => {
+        this.nextIndex();
+        this._updateValue(trigger);
+      },
+      ArrowUp: () => {
+        this.prevIndex();
+        this._updateValue(trigger);
+      },
+      // On Enter key we only update the value and let the event propagate for the consumer to
+      // handle it directly. Note that the items' action do not run on Enter because the focus
+      // remain on the trigger element.
+      Enter$: () => { if (this._selected) { trigger.value = this._selected.textContent!; }},
     }));
 
     this.autoDispose(onElem(trigger, 'input', () => {
@@ -101,10 +110,19 @@ class Autocomplete extends BaseMenu implements IPopupContent {
     if (trigger.value) {
       this._selectRow(trigger.value);
     }
+
+    // Prevent trigger element from being blurred on click.
+    dom.onElem(this._menuContent, 'mousedown', (ev) => ev.preventDefault());
   }
 
   private _selectRow(inputVal: string): void {
     const match: HTMLElement|null = this._findMatch(this._rows, inputVal);
     this.setSelected(match);
+  }
+
+  // Update trigger's value with the currently selected choice. Or with the last typed value, if
+  // nothing is selected.
+  private _updateValue(trigger: HTMLInputElement) {
+    trigger.value = this._selected ? this._selected.textContent! : this._lastAsTyped;
   }
 }
