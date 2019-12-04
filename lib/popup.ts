@@ -27,9 +27,9 @@ export interface IPopupOptions {
   // default; string is a selector for the closest matching ancestor of triggerElem, e.g. 'body'.
   attach?: Element|string|null;
 
-  // Boundaries for the placement of the popup. The default is 'viewport'. This determines the
-  // values of modifiers.flip.boundariesElement and modifiers.preventOverflow.boundariesElement.
-  // Use null to use the defaults from popper.js. These may be set individually via modifiers.
+  // Boundaries for the placement of the popup. This determines the values of
+  // modifiers.flip.boundariesElement and modifiers.preventOverflow.boundariesElement. Use null to
+  // use the defaults from popper.js. These may be set individually via modifiers.
   boundaries?: Element|'scrollParent'|'window'|'viewport'|null;
 
   // On what events, the popup is triggered.
@@ -70,6 +70,11 @@ export interface IOpenController extends Disposable {
    * Returns the trigger element that opened this popup.
    */
   getTriggerElem(): Element;
+
+  /**
+   * Schedules an UI update for the popup's position.
+   */
+  update(): void;
 
   // Note that .autoDispose() and .onDispose() methods from grainjs Disposable are available,
   // and triggered when the popup is closed.
@@ -140,6 +145,44 @@ export function setPopupToCreateDom(triggerElem: Element, domCreator: IPopupDomC
     return {content, dispose};
   }
   return setPopupToFunc(triggerElem, openFunc, options);
+}
+
+/**
+ * Open a popup using as content the element returned by the given func. Note that the `trigger`
+ * option is ignored by this function and that the default of the `attach` option is `body` instead of `null`.
+ *
+ * It allows you to bind the creation of the popup to a menu item as follow:
+ *   menuItem(elem => popupOpen(elem, (ctl) => buildDom(ctl)))
+ *
+ */
+export function popupOpen(reference: Element, domCreator: IPopupDomCreator, options: IPopupOptions): PopupControl {
+  function openFunc(openCtl: IOpenController) {
+    const content = domCreator(openCtl);
+    function dispose() { domDispose(content); ctl.dispose(); }
+    return {content, dispose};
+  }
+  const ctl = PopupControl.create(null) as PopupControl;
+
+  ctl.attachElem(reference, openFunc, {
+
+    // Set the default for the attach option to `body`. Because otherwise the default 'null' would
+    // causes the popup to be attached to reference.parentNode. This does make little sense when used
+    // as follow `menuItem((elem) => popupOpen(elem, ...` because it would close the popup just after
+    // the click.
+    attach: 'body',
+
+    // The Popper's default of 'scrollParent' for modifiers.preventOverflow.boundariesElement causes
+    // the popup to be placed incorrectly when the reference element gets disposed after the
+    // click. Setting boundaries to 'viewport' solves that issue
+    boundaries: 'viewport',
+
+    ...options,
+
+    // Overrides '.trigger' to avoid attaching listeners to reference.
+    trigger: undefined
+  });
+  ctl.open();
+  return ctl;
 }
 
 // Helper type for maintaining setTimeout() timers.
