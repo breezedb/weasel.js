@@ -46,6 +46,8 @@ export interface IMenuOptions extends IPopupOptions {
 
 export interface ISubMenuOptions {
   menuCssClass?: string;    // If provided, applies the css class to the menu container.
+  expandIcon?:  () => DomElementArg; // Overrides the default expand icon.
+  action?: (item: HTMLElement, event: Event) => void; // If provided, called when the item is clicked.
 }
 
 /**
@@ -99,11 +101,11 @@ function baseElem(createFn: MenuClassCons, triggerElem: Element, createFunc: Men
  *    --weaseljs-selected-color
  *    --weaseljs-menu-item-padding
  */
-export function menuItem(action: (item: HTMLElement) => void, ...args: DomElementArg[]): Element {
+export function menuItem(action: (item: HTMLElement, ev: Event) => void, ...args: DomElementArg[]): Element {
   return cssMenuItem(
     ...args,
-    dom.on('click', (ev, elem) => elem.classList.contains('disabled') || action(elem)),
-    onKeyDown({Enter$: (ev, elem) => action(elem)})
+    dom.on('click', (ev, elem) => elem.classList.contains('disabled') || action(elem, ev)),
+    onKeyDown({Enter$: (ev, elem) => action(elem, ev)})
   );
 }
 
@@ -389,10 +391,8 @@ export function menuItemSubmenu(
     isSubMenu: true,
     ...options
   };
-
   return cssMenuItem(...args,
-    dom('div', '\u25B6'),     // A right-pointing triangle
-
+    options.expandIcon ? options.expandIcon() : cssExpandIcon(),
     dom.autoDispose(ctl),
 
     // Set the submenu to be attached as a child of this element rather than as a sibling.
@@ -412,7 +412,13 @@ export function menuItemSubmenu(
       (yesNo: boolean) => yesNo || ctl.close()),
 
     // Clicks that open a submenu should not cause parent menu to close.
-    dom.on('click', (ev) => { ev.stopPropagation(); }),
+    dom.on('click', (ev, elem) => {
+      if (options.action && !elem.classList.contains('disabled')) {
+        options.action(elem, ev);
+      } else {
+        ev.stopPropagation();
+      }
+    }),
   );
 }
 
@@ -481,4 +487,21 @@ export const cssMenuDivider = styled('div', `
   width: 100%;
   margin: 4px 0;
   background-color: #D9D9D9;
+`);
+
+export const cssExpandIcon = styled('div.weasel-popup-expand-icon', `
+  flex: none;
+  margin-right: -20px;
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  margin-top: -2px;
+  &:after {
+    content: '\u25B6\uFE0E';
+    display: inline-block;
+    text-align: center;
+    width: 16px;
+    height: 16px;
+    font-size: 8px;
+  }
 `);

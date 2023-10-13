@@ -1,14 +1,14 @@
 {
   "name": "popweasel",
-  "version": "0.1.19",
+  "version": "0.1.20",
   "description": "Collection of UI elements that behave as popovers",
   "main": "dist/index",
   "types": "dist/index",
   "scripts": {
     "build": "tsc",
     "test": "MOCHA_WEBDRIVER_STACKTRACES=1 mocha 'test/browser/**/*.{js,ts}'",
-    "test-debug": "MOCHA_WEBDRIVER_STACKTRACES=1 mocha --bail test/browser/**/*.{js,ts} --no-exit",
-    "test-manual": "webpack-dev-server --config test/fixtures/webpack.config.js",
+    "test-debug": "NODE_OPTIONS=--openssl-legacy-provider MOCHA_WEBDRIVER_STACKTRACES=1 mocha --bail test/browser/**/*.{js,ts} --no-exit",
+    "test-manual": "NODE_OPTIONS=--openssl-legacy-provider webpack-dev-server --config test/fixtures/webpack.config.js",
     "prepack": "npm run build && npm test"
   },
   "files": [
